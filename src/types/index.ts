@@ -23,6 +23,7 @@ export interface DailyReport {
   report_date: string; // YYYY-MM-DD
   revenue: number | null;
   customer_count: number | null;
+  reservation_count: number | null;
   weather: string | null;
   memo: string | null;
   created_at: string;
@@ -47,10 +48,42 @@ export interface Conversation {
   created_at: string;
 }
 
-// Claude APIレスポンスの構造化出力（Sprint 2で拡張）
+// 日報セッションのステップ定義
+export type ReportStep =
+  | "customer_count"
+  | "revenue"
+  | "reservation_count"
+  | "memo"
+  | "completed";
+
+// 日報入力セッション
+// Webhookはステートレスなため、入力途中の値をDBで保持する
+export interface ReportSession {
+  id: string;
+  store_id: string;
+  status: "active" | "completed" | "cancelled";
+  current_step: ReportStep;
+  customer_count: number | null;
+  revenue: number | null;
+  reservation_count: number | null;
+  memo: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Claude APIによる所感分析結果
+export interface MemoAnalysis {
+  feedback: string; // AIフィードバックメッセージ
+  extracted_contexts: {
+    context_type: string;
+    content: string;
+  }[];
+}
+
+// Claude APIレスポンスの構造化出力
 export interface ClaudeResponse {
   reply: string; // LINEに返すメッセージ
-  daily_report: Partial<DailyReport> | null; // 日報データが含まれていれば抽出
+  daily_report: Partial<DailyReport> | null;
   extracted_contexts: Pick<ExtractedContext, "context_type" | "content">[];
 }
 
