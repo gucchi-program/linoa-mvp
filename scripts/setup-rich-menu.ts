@@ -226,7 +226,7 @@ function createSimplePng(width: number, height: number): Buffer {
 
   // zlibのstoreモードで圧縮（実質無圧縮）
   const zlib = require("zlib");
-  const compressed = zlib.deflateSync(rawData, { level: 0 });
+  const compressed = zlib.deflateSync(rawData, { level: 9 });
 
   // PNGファイル構築
   const chunks: Buffer[] = [];
