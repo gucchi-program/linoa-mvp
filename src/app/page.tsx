@@ -1,5 +1,76 @@
 const LINE_URL = "#"; // LINE友だち追加URL（後日設定）
 
+// Google検索のリッチスニペット表示用の構造化データ（JSON-LD）
+// SoftwareApplication: サービス情報、FAQPage: よくある質問をGoogle検索結果に直接表示
+function JsonLd() {
+  const softwareApp = {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: "Linoa",
+    description:
+      "飲食店オーナー向けAI秘書サービス。LINEで日報を送るだけで、売上分析・経営アドバイス・SNS投稿作成まで。",
+    url: "https://li-noa.jp",
+    applicationCategory: "BusinessApplication",
+    operatingSystem: "Web",
+    offers: {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "JPY",
+      description: "無料テスト中",
+    },
+    featureList: [
+      "LINE日報入力",
+      "売上ダッシュボード",
+      "AI経営アドバイス",
+      "SNS/POP自動生成",
+    ],
+  };
+
+  const faqPage = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: [
+      {
+        "@type": "Question",
+        name: "Linoaの料金はかかりますか？",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "現在、無料テスト中です。テスト期間中はすべての機能を無料でお使いいただけます。",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "ITに詳しくなくても使えますか？",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "はい。LINEが使えれば大丈夫です。専用アプリのインストールや難しい操作は一切ありません。",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "どんな業態に対応していますか？",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "居酒屋、カフェ、レストラン、バーなど、飲食店全般に対応しています。",
+        },
+      },
+    ],
+  };
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareApp) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqPage) }}
+      />
+    </>
+  );
+}
+
 function Header() {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
@@ -418,6 +489,7 @@ function Footer() {
 export default function Home() {
   return (
     <main className="min-h-screen bg-white">
+      <JsonLd />
       <Header />
       <HeroSection />
       <PainPointsSection />
