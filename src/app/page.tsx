@@ -1,4 +1,4 @@
-const LINE_URL = "#"; // LINE友だち追加URL（後日設定）
+const LINE_URL = "https://line.me/R/ti/p/@472wtopo";
 
 // Google検索のリッチスニペット表示用の構造化データ（JSON-LD）
 // SoftwareApplication: サービス情報、FAQPage: よくある質問をGoogle検索結果に直接表示

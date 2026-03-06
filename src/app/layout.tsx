@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Geist } from "next/font/google";
 import "./globals.css";
+
+// Google Search Consoleの所有権確認用メタタグ
+// Google Analytics（GA4）の計測ID
+const GOOGLE_SITE_VERIFICATION = process.env.GOOGLE_SITE_VERIFICATION;
+const GA_MEASUREMENT_ID = process.env.GA_MEASUREMENT_ID;
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -48,6 +54,9 @@ export const metadata: Metadata = {
     description:
       "LINEで日報を送るだけ。売上分析・経営アドバイスで飲食店オーナーの毎日をサポートします。",
   },
+  verification: {
+    google: GOOGLE_SITE_VERIFICATION,
+  },
   robots: {
     index: true,
     follow: true,
@@ -68,7 +77,21 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ja">
-      <body className={`${geistSans.variable} antialiased`}>{children}</body>
+      <body className={`${geistSans.variable} antialiased`}>
+        {children}
+        {/* Google Analytics（GA4）: GA_MEASUREMENT_ID が設定されている場合のみ有効 */}
+        {GA_MEASUREMENT_ID && (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+              strategy="afterInteractive"
+            />
+            <Script id="ga4" strategy="afterInteractive">
+              {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','${GA_MEASUREMENT_ID}')`}
+            </Script>
+          </>
+        )}
+      </body>
     </html>
   );
 }
