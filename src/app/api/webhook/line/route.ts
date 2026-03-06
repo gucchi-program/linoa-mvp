@@ -8,6 +8,7 @@ import {
   saveExtractedContexts,
   saveConversation,
 } from "@/lib/db";
+import { processOnboardingInput, getOnboardingQuestion } from "@/lib/onboarding";
 import {
   isReportTrigger,
   isCancelWord,
@@ -81,14 +82,10 @@ async function handleFollow(event: LineWebhookEvent): Promise<void> {
   const lineUserId = event.source.userId;
 
   // 既存チェック（ブロック→再追加のケース）
-  const { data: existing } = await supabase
-    .from("stores")
-    .select("id")
-    .eq("line_user_id", lineUserId)
-    .single();
+  const existing = await getStoreByLineUserId(lineUserId);
 
   if (!existing) {
-    // 新規店舗レコード作成
+    // 新規店舗レコード作成（onboarding_step='store_name'がデフォルト）
     const { error } = await supabase.from("stores").insert({
       line_user_id: lineUserId,
     });
@@ -96,15 +93,36 @@ async function handleFollow(event: LineWebhookEvent): Promise<void> {
     if (error) {
       console.error("Failed to create store:", error);
     }
+
+    // ウェルカムメッセージ + 最初の質問
+    await replyMessage(event.replyToken, [
+      {
+        type: "text",
+        text: `はじめまして！Linoa（リノア）です。\nあなたのお店の「専属AI秘書」として、日々の経営をサポートします。\n\nまずは${getOnboardingQuestion("store_name")}`,
+      },
+    ]);
+    return;
   }
 
-  // ウェルカムメッセージ
-  await replyMessage(event.replyToken, [
-    {
-      type: "text",
-      text: "はじめまして！Linoa（リノア）です。\nあなたのお店の「専属AI秘書」として、日々の経営をサポートします。\n\nまずはお店の名前を教えていただけますか？",
-    },
-  ]);
+  // 既存ユーザーの再追加
+  if (existing.onboarding_completed) {
+    // オンボーディング完了済み → おかえりメッセージ
+    await replyMessage(event.replyToken, [
+      {
+        type: "text",
+        text: "おかえりなさい！Linoaです。\nまた一緒に頑張りましょう。「日報」と送ると日報入力が始まります。",
+      },
+    ]);
+  } else {
+    // オンボーディング途中 → 現在のステップの質問を再送
+    const question = getOnboardingQuestion(existing.onboarding_step);
+    await replyMessage(event.replyToken, [
+      {
+        type: "text",
+        text: `おかえりなさい！Linoaです。\n登録の続きから始めましょう。\n\n${question}`,
+      },
+    ]);
+  }
 }
 
 // ============================================
@@ -124,6 +142,15 @@ async function handleMessage(event: LineWebhookEvent): Promise<void> {
   if (!store) {
     await replyMessage(event.replyToken, [
       { type: "text", text: "お店の登録が見つかりません。友だち追加からやり直してください。" },
+    ]);
+    return;
+  }
+
+  // オンボーディング未完了の場合は日報より優先して処理
+  if (!store.onboarding_completed) {
+    const result = await processOnboardingInput(store, userMessage);
+    await replyMessage(event.replyToken, [
+      { type: "text", text: result.message },
     ]);
     return;
   }

@@ -12,6 +12,7 @@ export interface Store {
   seat_count: number | null;
   opening_hours: string | null;
   onboarding_completed: boolean;
+  onboarding_step: OnboardingStep;
   created_at: string;
   updated_at: string;
 }
@@ -47,6 +48,16 @@ export interface Conversation {
   content: string;
   created_at: string;
 }
+
+// オンボーディングのステップ定義
+// store_name → owner_name → genre → seat_count → opening_hours → completed の順で進行
+export type OnboardingStep =
+  | "store_name"
+  | "owner_name"
+  | "genre"
+  | "seat_count"
+  | "opening_hours"
+  | "completed";
 
 // 日報セッションのステップ定義
 export type ReportStep =

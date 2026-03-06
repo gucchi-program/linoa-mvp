@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { Store, ReportSession } from "@/types";
+import type { Store, ReportSession, OnboardingStep } from "@/types";
 
 // ============================================
 // store取得（LINE user IDから）
@@ -17,6 +17,28 @@ export async function getStoreByLineUserId(
     // PGRST116: 0行の場合（未登録ユーザー）
     if (error.code === "PGRST116") return null;
     console.error("getStoreByLineUserId error:", error);
+    throw error;
+  }
+  return data;
+}
+
+// ============================================
+// store更新（オンボーディング等で使用）
+// Partial<Store>のうち更新可能なカラムを指定して更新する
+// ============================================
+export async function updateStore(
+  storeId: string,
+  updates: Partial<Pick<Store, "store_name" | "owner_name" | "genre" | "seat_count" | "opening_hours" | "onboarding_step" | "onboarding_completed">>
+): Promise<Store> {
+  const { data, error } = await supabase
+    .from("stores")
+    .update(updates)
+    .eq("id", storeId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("updateStore error:", error);
     throw error;
   }
   return data;
