@@ -7,6 +7,8 @@ import {
   upsertDailyReport,
   saveExtractedContexts,
   saveConversation,
+  getOwnerByLineUserId,
+  createDashboardToken,
 } from "@/lib/db";
 import { processOnboardingInput, getOnboardingQuestion } from "@/lib/onboarding";
 import {
@@ -18,6 +20,12 @@ import {
 } from "@/lib/report-session";
 import { analyzeMemo } from "@/lib/claude";
 import type { LineWebhookBody, LineWebhookEvent, ReportSession } from "@/types";
+
+// 「レポート」「レポート見せて」等のトリガー判定
+function isReportViewTrigger(message: string): boolean {
+  const triggers = ["レポート", "れぽーと", "レポ", "売上確認", "ダッシュボード"];
+  return triggers.some((t) => message.includes(t));
+}
 
 // Next.js App Router の Route Handler
 // LINE Platformからの Webhook を受け取るエンドポイント
@@ -152,6 +160,26 @@ async function handleMessage(event: LineWebhookEvent): Promise<void> {
     await replyMessage(event.replyToken, [
       { type: "text", text: result.message },
     ]);
+    return;
+  }
+
+  // 「レポート」トリガー → ダッシュボードURLを返す
+  if (isReportViewTrigger(userMessage)) {
+    const owner = await getOwnerByLineUserId(lineUserId);
+    if (owner) {
+      const token = await createDashboardToken(owner.id);
+      const dashboardUrl = `https://li-noa.jp/dashboard?token=${token}`;
+      await replyMessage(event.replyToken, [
+        {
+          type: "text",
+          text: `レポートはこちらからご覧いただけます（24時間有効）\n\n${dashboardUrl}`,
+        },
+      ]);
+    } else {
+      await replyMessage(event.replyToken, [
+        { type: "text", text: "オーナー情報が見つかりません。" },
+      ]);
+    }
     return;
   }
 

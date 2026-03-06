@@ -2,10 +2,20 @@
 // Linoa MVP 型定義
 // ============================================
 
+// オーナーマスタ（Sprint 4で分離）
+export interface Owner {
+  id: string;
+  line_user_id: string;
+  owner_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // 店舗マスタ
 export interface Store {
   id: string;
-  line_user_id: string;
+  owner_id: string;
+  line_user_id: string; // 後方互換のため残す（移行期間）
   store_name: string | null;
   owner_name: string | null;
   genre: string | null;
@@ -15,6 +25,15 @@ export interface Store {
   onboarding_step: OnboardingStep;
   created_at: string;
   updated_at: string;
+}
+
+// ダッシュボード認証トークン
+export interface DashboardToken {
+  id: string;
+  owner_id: string;
+  token: string;
+  expires_at: string;
+  created_at: string;
 }
 
 // 日報データ

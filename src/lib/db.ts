@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
-import type { Store, ReportSession, OnboardingStep } from "@/types";
+import type { Store, ReportSession, Owner, DashboardToken } from "@/types";
+import crypto from "crypto";
 
 // ============================================
 // store取得（LINE user IDから）
@@ -203,4 +204,118 @@ export async function saveConversation(
     console.error("saveConversation error:", error);
     throw error;
   }
+}
+
+// ============================================
+// オーナー取得（LINE user IDから）
+// ============================================
+export async function getOwnerByLineUserId(
+  lineUserId: string
+): Promise<Owner | null> {
+  const { data, error } = await supabase
+    .from("owners")
+    .select("*")
+    .eq("line_user_id", lineUserId)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    console.error("getOwnerByLineUserId error:", error);
+    throw error;
+  }
+  return data;
+}
+
+// ============================================
+// オーナーの全店舗取得
+// ============================================
+export async function getStoresByOwnerId(
+  ownerId: string
+): Promise<Store[]> {
+  const { data, error } = await supabase
+    .from("stores")
+    .select("*")
+    .eq("owner_id", ownerId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("getStoresByOwnerId error:", error);
+    throw error;
+  }
+  return data ?? [];
+}
+
+// ============================================
+// 店舗の日報一覧取得（ダッシュボード用）
+// ============================================
+export async function getDailyReports(
+  storeId: string,
+  limit: number = 90
+): Promise<{
+  report_date: string;
+  revenue: number | null;
+  customer_count: number | null;
+  reservation_count: number | null;
+  memo: string | null;
+}[]> {
+  const { data, error } = await supabase
+    .from("daily_reports")
+    .select("report_date, revenue, customer_count, reservation_count, memo")
+    .eq("store_id", storeId)
+    .order("report_date", { ascending: true })
+    .limit(limit);
+
+  if (error) {
+    console.error("getDailyReports error:", error);
+    throw error;
+  }
+  return data ?? [];
+}
+
+// ============================================
+// ダッシュボード認証トークン生成
+// 24時間有効のワンタイムトークン
+// ============================================
+export async function createDashboardToken(
+  ownerId: string
+): Promise<string> {
+  const token = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+  const { error } = await supabase
+    .from("dashboard_tokens")
+    .insert({ owner_id: ownerId, token, expires_at: expiresAt });
+
+  if (error) {
+    console.error("createDashboardToken error:", error);
+    throw error;
+  }
+  return token;
+}
+
+// ============================================
+// ダッシュボードトークン検証
+// 有効なトークンならowner_idを返す
+// ============================================
+export async function verifyDashboardToken(
+  token: string
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("dashboard_tokens")
+    .select("owner_id, expires_at")
+    .eq("token", token)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    console.error("verifyDashboardToken error:", error);
+    return null;
+  }
+
+  // 有効期限チェック
+  if (new Date(data.expires_at) < new Date()) {
+    return null;
+  }
+
+  return data.owner_id;
 }
