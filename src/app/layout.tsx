@@ -10,7 +10,22 @@ const geistSans = Geist({
 export const metadata: Metadata = {
   title: "Linoa - あなたのお店の専属AI秘書",
   description:
-    "個人経営の飲食店オーナー向けAI秘書サービス。LINEで日々の経営をサポートします。",
+    "LINEで話しかけるだけ。日報記録・売上分析・経営アドバイスで、飲食店オーナーの毎日をサポートするAI秘書サービスです。",
+  openGraph: {
+    title: "Linoa - あなたのお店の専属AI秘書",
+    description:
+      "LINEで話しかけるだけ。日報記録・売上分析・経営アドバイスで、飲食店オーナーの毎日をサポートします。",
+    url: "https://li-noa.jp",
+    siteName: "Linoa",
+    locale: "ja_JP",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Linoa - あなたのお店の専属AI秘書",
+    description:
+      "LINEで話しかけるだけ。日報記録・売上分析・経営アドバイスで、飲食店オーナーの毎日をサポートします。",
+  },
 };
 
 export default function RootLayout({
