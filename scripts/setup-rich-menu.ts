@@ -176,7 +176,7 @@ async function main() {
         Authorization: `Bearer ${CHANNEL_ACCESS_TOKEN}`,
         "Content-Type": "image/png",
       },
-      body: imageBuffer,
+      body: imageBuffer as unknown as BodyInit,
     }
   );
 

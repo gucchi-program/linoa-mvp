@@ -19,6 +19,7 @@ import {
   cancelReportSession,
 } from "@/lib/report-session";
 import { analyzeMemo } from "@/lib/claude";
+import { getWeather } from "@/lib/weather";
 import type { LineWebhookBody, LineWebhookEvent, ReportSession } from "@/types";
 
 // 「レポート」「レポート見せて」等のトリガー判定
@@ -252,6 +253,9 @@ async function handleReportComplete(
   const reservationCount = session.reservation_count ?? 0;
   const memo = session.memo ?? "";
 
+  // 天候を自動取得（APIエラーでも日報保存は続行）
+  const weather = await getWeather(reportDate);
+
   // 日報をDBに保存（同日2回目は上書き）
   await upsertDailyReport({
     storeId,
@@ -260,6 +264,7 @@ async function handleReportComplete(
     revenue,
     reservationCount,
     memo,
+    weather,
   });
 
   // Claude APIで所感を分析
@@ -279,15 +284,19 @@ async function handleReportComplete(
   await saveConversation(storeId, "assistant", `[AIフィードバック] ${analysis.feedback}`);
 
   // サマリーメッセージ
-  const summary = [
+  const summaryLines = [
     `日報を記録しました`,
     ``,
     `--- ${reportDate} ---`,
+  ];
+  if (weather) summaryLines.push(`天気: ${weather}`);
+  summaryLines.push(
     `客数: ${customerCount}人`,
     `売上: ${revenue.toLocaleString()}円`,
     `予約: ${reservationCount}件`,
     `所感: ${memo.length > 50 ? memo.substring(0, 50) + "..." : memo}`,
-  ].join("\n");
+  );
+  const summary = summaryLines.join("\n");
 
   // 2メッセージで返信（サマリー + AIフィードバック）
   await replyMessage(replyToken, [

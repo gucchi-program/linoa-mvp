@@ -135,6 +135,7 @@ export async function upsertDailyReport(params: {
   revenue: number;
   reservationCount: number;
   memo: string;
+  weather?: string | null;
 }): Promise<string> {
   const { data, error } = await supabase
     .from("daily_reports")
@@ -146,6 +147,7 @@ export async function upsertDailyReport(params: {
         revenue: params.revenue,
         reservation_count: params.reservationCount,
         memo: params.memo,
+        ...(params.weather ? { weather: params.weather } : {}),
       },
       { onConflict: "store_id,report_date" }
     )
