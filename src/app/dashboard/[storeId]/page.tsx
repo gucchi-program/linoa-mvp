@@ -18,6 +18,7 @@ interface StoreData {
     revenue: number | null;
     customer_count: number | null;
     reservation_count: number | null;
+    weather: string | null;
     memo: string | null;
   }[];
 }
@@ -197,6 +198,7 @@ function DashboardPage() {
                   <thead>
                     <tr className="border-b text-left text-gray-500">
                       <th className="py-2 px-2">日付</th>
+                      <th className="py-2 px-2">天気</th>
                       <th className="py-2 px-2">売上</th>
                       <th className="py-2 px-2">客数</th>
                       <th className="py-2 px-2">予約</th>
@@ -206,7 +208,8 @@ function DashboardPage() {
                   <tbody>
                     {[...store.reports].reverse().slice(0, 14).map((r) => (
                       <tr key={r.report_date} className="border-b hover:bg-gray-50">
-                        <td className="py-2 px-2">{r.report_date}</td>
+                        <td className="py-2 px-2 whitespace-nowrap">{r.report_date}</td>
+                        <td className="py-2 px-2 whitespace-nowrap text-xs">{r.weather ?? "-"}</td>
                         <td className="py-2 px-2">¥{(r.revenue ?? 0).toLocaleString()}</td>
                         <td className="py-2 px-2">{r.customer_count ?? 0}人</td>
                         <td className="py-2 px-2">{r.reservation_count ?? 0}件</td>

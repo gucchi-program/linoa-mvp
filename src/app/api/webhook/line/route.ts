@@ -196,12 +196,19 @@ async function handleMessage(event: LineWebhookEvent): Promise<void> {
     return;
   }
 
-  // アクティブセッションがない場合 → 通常メッセージ（現時点ではエコー）
+  // アクティブセッションがない場合 → ヘルプメッセージ
   if (!activeSession) {
     await replyMessage(event.replyToken, [
       {
         type: "text",
-        text: `「${userMessage}」を受け取りました。\n\n日報を入力するには「日報」と送ってください。`,
+        text: [
+          `Linoaでできること：`,
+          ``,
+          `「日報」→ 今日の日報を入力`,
+          `「レポート」→ ダッシュボードを表示`,
+          ``,
+          `下のメニューからもお選びいただけます。`,
+        ].join("\n"),
       },
     ]);
     return;

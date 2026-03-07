@@ -258,11 +258,12 @@ export async function getDailyReports(
   revenue: number | null;
   customer_count: number | null;
   reservation_count: number | null;
+  weather: string | null;
   memo: string | null;
 }[]> {
   const { data, error } = await supabase
     .from("daily_reports")
-    .select("report_date, revenue, customer_count, reservation_count, memo")
+    .select("report_date, revenue, customer_count, reservation_count, weather, memo")
     .eq("store_id", storeId)
     .order("report_date", { ascending: true })
     .limit(limit);
