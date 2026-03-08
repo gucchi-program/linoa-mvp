@@ -18,13 +18,25 @@ import {
   processReportInput,
   cancelReportSession,
 } from "@/lib/report-session";
-import { analyzeMemo } from "@/lib/claude";
+import { analyzeMemo, generateSnsPost, generatePopCopy } from "@/lib/claude";
 import { getWeather } from "@/lib/weather";
 import type { LineWebhookBody, LineWebhookEvent, ReportSession } from "@/types";
 
 // 「レポート」「レポート見せて」等のトリガー判定
 function isReportViewTrigger(message: string): boolean {
   const triggers = ["レポート", "れぽーと", "レポ", "売上確認", "ダッシュボード"];
+  return triggers.some((t) => message.includes(t));
+}
+
+// 「SNS」「投稿」等のトリガー判定
+function isSnsTrigger(message: string): boolean {
+  const triggers = ["SNS", "sns", "投稿", "インスタ", "ツイート"];
+  return triggers.some((t) => message.includes(t));
+}
+
+// 「POP」「ポップ」等のトリガー判定
+function isPopTrigger(message: string): boolean {
+  const triggers = ["POP", "pop", "ポップ", "ぽっぷ"];
   return triggers.some((t) => message.includes(t));
 }
 
@@ -184,6 +196,18 @@ async function handleMessage(event: LineWebhookEvent): Promise<void> {
     return;
   }
 
+  // 「SNS」トリガー → SNS投稿文を生成
+  if (isSnsTrigger(userMessage)) {
+    await handleSnsGenerate(event.replyToken, store);
+    return;
+  }
+
+  // 「POP」トリガー → POP画像を生成
+  if (isPopTrigger(userMessage)) {
+    await handlePopGenerate(event.replyToken, store);
+    return;
+  }
+
   // アクティブな日報セッションを確認
   const activeSession = await getActiveSession(store.id);
 
@@ -206,6 +230,8 @@ async function handleMessage(event: LineWebhookEvent): Promise<void> {
           ``,
           `「日報」→ 今日の日報を入力`,
           `「レポート」→ ダッシュボードを表示`,
+          `「SNS」→ SNS投稿文を自動生成`,
+          `「POP」→ 店頭POP画像を自動生成`,
           ``,
           `下のメニューからもお選びいただけます。`,
         ].join("\n"),
@@ -309,5 +335,87 @@ async function handleReportComplete(
   await replyMessage(replyToken, [
     { type: "text", text: summary },
     { type: "text", text: `\n${analysis.feedback}` },
+  ]);
+}
+
+// ============================================
+// SNS投稿文生成ハンドラ
+// Claude APIでInstagram/X向けの投稿文を生成してLINEで返す
+// ============================================
+async function handleSnsGenerate(
+  replyToken: string,
+  store: { id: string; store_name: string | null; genre: string | null }
+): Promise<void> {
+  // 直近の日報所感を取得（コンテキストとして活用）
+  const { data: latestReport } = await supabase
+    .from("daily_reports")
+    .select("memo")
+    .eq("store_id", store.id)
+    .order("report_date", { ascending: false })
+    .limit(1)
+    .single();
+
+  const result = await generateSnsPost({
+    storeName: store.store_name ?? "お店",
+    genre: store.genre ?? "飲食店",
+    latestMemo: latestReport?.memo ?? null,
+  });
+
+  await replyMessage(replyToken, [
+    {
+      type: "text",
+      text: `【Instagram用】\n\n${result.instagram}`,
+    },
+    {
+      type: "text",
+      text: `【X（Twitter）用】\n\n${result.twitter}\n\n※ そのままコピーして投稿できます`,
+    },
+  ]);
+}
+
+// ============================================
+// POP画像生成ハンドラ
+// Claude APIでコピーを生成 → satori APIで画像化 → LINEに画像送信
+// ============================================
+async function handlePopGenerate(
+  replyToken: string,
+  store: { id: string; store_name: string | null; genre: string | null }
+): Promise<void> {
+  const popCopy = await generatePopCopy({
+    storeName: store.store_name ?? "お店",
+    genre: store.genre ?? "飲食店",
+    latestMemo: null,
+  });
+
+  // POP画像URLを構築（自サーバーのAPI）
+  const params = new URLSearchParams({
+    headline: popCopy.headline,
+    subtext: popCopy.subtext,
+    store: store.store_name ?? "",
+    accent: popCopy.accent,
+  });
+
+  const baseUrl = "https://li-noa.jp/api/pop";
+  const originalUrl = `${baseUrl}?${params.toString()}&size=large`;
+  const previewUrl = `${baseUrl}?${params.toString()}&size=small`;
+
+  await replyMessage(replyToken, [
+    {
+      type: "image",
+      originalContentUrl: originalUrl,
+      previewImageUrl: previewUrl,
+    },
+    {
+      type: "text",
+      text: [
+        `【POP画像を生成しました】`,
+        ``,
+        `コピー: ${popCopy.headline}`,
+        `${popCopy.subtext}`,
+        ``,
+        `※ 画像を長押しで保存できます`,
+        `※ もう一度「POP」と送ると別パターンが生成されます`,
+      ].join("\n"),
+    },
   ]);
 }

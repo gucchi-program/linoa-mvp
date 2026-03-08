@@ -278,8 +278,7 @@ function FeaturesSection() {
     {
       icon: "🎨",
       title: "SNS / POP生成",
-      description: "投稿文やPOPデザインをAIが自動作成。販促の手間を大幅に削減します。",
-      comingSoon: true,
+      description: "LINEで「SNS」「POP」と送るだけ。投稿文やPOP画像をAIが自動作成します。",
       accent: "from-purple-400 to-pink-500",
     },
   ];
@@ -307,11 +306,6 @@ function FeaturesSection() {
               {/* ホバー時のアクセントライン */}
               <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${f.accent} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
 
-              {f.comingSoon && (
-                <span className="absolute top-4 right-4 text-xs bg-purple-50 text-purple-600 font-semibold px-3 py-1 rounded-full border border-purple-100">
-                  Coming Soon
-                </span>
-              )}
               <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center text-2xl mb-5 group-hover:scale-110 transition-transform duration-300">
                 {f.icon}
               </div>

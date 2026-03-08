@@ -134,21 +134,27 @@ async function main() {
   }
 
   // 2. リッチメニュー作成
-  // サイズは2500x843（コンパクト版）、左右2分割
+  // サイズは2500x843（コンパクト版）、3分割
+  const thirdWidth = Math.floor(2500 / 3); // 833px
   const menuData = {
     size: { width: 2500, height: 843 },
     selected: true, // デフォルトで開いた状態
-    name: "Linoa メインメニュー",
+    name: "Linoa メインメニュー v2",
     chatBarText: "メニュー",
     areas: [
       {
-        // 左半分: 日報入力
-        bounds: { x: 0, y: 0, width: 1250, height: 843 },
+        // 左: 日報入力
+        bounds: { x: 0, y: 0, width: thirdWidth, height: 843 },
         action: { type: "message", text: "日報" },
       },
       {
-        // 右半分: レポート表示
-        bounds: { x: 1250, y: 0, width: 1250, height: 843 },
+        // 中央: SNS/POP生成
+        bounds: { x: thirdWidth, y: 0, width: thirdWidth, height: 843 },
+        action: { type: "message", text: "SNS" },
+      },
+      {
+        // 右: レポート表示
+        bounds: { x: thirdWidth * 2, y: 0, width: 2500 - thirdWidth * 2, height: 843 },
         action: { type: "message", text: "レポート" },
       },
     ],
@@ -202,7 +208,7 @@ function createSimplePng(width: number, height: number): Buffer {
   const rowBytes = 1 + width * 3;
   const rawData = Buffer.alloc(rowBytes * height);
 
-  const halfWidth = Math.floor(width / 2);
+  const thirdWidth = Math.floor(width / 3);
 
   for (let y = 0; y < height; y++) {
     const rowOffset = y * rowBytes;
@@ -210,13 +216,18 @@ function createSimplePng(width: number, height: number): Buffer {
 
     for (let x = 0; x < width; x++) {
       const pixelOffset = rowOffset + 1 + x * 3;
-      if (x < halfWidth) {
-        // 左: インディゴ (#4F46E5)
+      if (x < thirdWidth) {
+        // 左: インディゴ (#4F46E5) 日報
         rawData[pixelOffset] = 0x4f;
         rawData[pixelOffset + 1] = 0x46;
         rawData[pixelOffset + 2] = 0xe5;
+      } else if (x < thirdWidth * 2) {
+        // 中央: パープル (#7C3AED) SNS/POP
+        rawData[pixelOffset] = 0x7c;
+        rawData[pixelOffset + 1] = 0x3a;
+        rawData[pixelOffset + 2] = 0xed;
       } else {
-        // 右: LINE緑 (#06C755)
+        // 右: LINE緑 (#06C755) レポート
         rawData[pixelOffset] = 0x06;
         rawData[pixelOffset + 1] = 0xc7;
         rawData[pixelOffset + 2] = 0x55;

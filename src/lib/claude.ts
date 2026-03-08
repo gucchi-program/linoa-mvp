@@ -199,6 +199,151 @@ export async function generateWeeklyReport(
   }
 }
 
+// ============================================
+// SNS投稿文生成
+// 店舗情報と直近の日報データからSNS投稿文を生成
+// ============================================
+interface SnsPostInput {
+  storeName: string;
+  genre: string;
+  latestMemo: string | null;
+  request?: string; // ユーザーからのリクエスト（「ランチのPR」など）
+}
+
+export interface SnsPostOutput {
+  instagram: string;
+  twitter: string;
+}
+
+const SNS_SYSTEM_PROMPT = `あなたは飲食店のSNS運用を代行するプロのマーケターです。
+店舗情報をもとに、Instagram用とX（Twitter）用の投稿文を作成してください。
+
+## 出力形式（JSON）
+{
+  "instagram": "Instagram用の投稿文（改行・絵文字・ハッシュタグ10個以上を含む。200〜300文字）",
+  "twitter": "X用の投稿文（140文字以内。ハッシュタグ3〜5個を含む）"
+}
+
+## ルール
+- 実在の人名や具体的な住所は含めない
+- お店の雰囲気が伝わる温かいトーンで書く
+- 季節感を意識する
+- ハッシュタグは日本語で、その業態の人が検索しそうなワードを選ぶ
+- 「本日のおすすめ」「季節限定」など来店動機を作る表現を入れる
+- JSON以外の文字列を出力しないこと`;
+
+export async function generateSnsPost(input: SnsPostInput): Promise<SnsPostOutput> {
+  try {
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
+
+    const userMessage = [
+      `## 店舗情報`,
+      `店名: ${input.storeName}`,
+      `業態: ${input.genre}`,
+      `現在: ${month}月（${dayOfWeek}曜日）`,
+      input.latestMemo ? `\n## 最近の所感\n${input.latestMemo}` : "",
+      input.request ? `\n## オーナーからのリクエスト\n${input.request}` : "",
+    ].join("\n");
+
+    const response = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 1024,
+      system: SNS_SYSTEM_PROMPT,
+      messages: [{ role: "user", content: userMessage }],
+    });
+
+    const textBlock = response.content.find((block) => block.type === "text");
+    if (!textBlock || textBlock.type !== "text") {
+      throw new Error("No text in response");
+    }
+
+    const parsed = JSON.parse(textBlock.text) as SnsPostOutput;
+    if (!parsed.instagram || !parsed.twitter) {
+      throw new Error("Invalid response format");
+    }
+    return parsed;
+  } catch (error) {
+    console.error("SNS post generation error:", error);
+    return {
+      instagram: "投稿文の生成に失敗しました。もう一度お試しください。",
+      twitter: "投稿文の生成に失敗しました。",
+    };
+  }
+}
+
+// ============================================
+// POP用コピー生成
+// 店頭POP・メニューボード用のキャッチコピーを生成
+// ============================================
+export interface PopCopyOutput {
+  headline: string;    // メインコピー（短い、太字用）
+  subtext: string;     // サブテキスト（補足説明）
+  accent: string;      // アクセント色のテーマ（warm/cool/festive）
+}
+
+const POP_SYSTEM_PROMPT = `あなたは飲食店の販促物を作るプロのコピーライターです。
+店頭POPやメニューボード用のキャッチコピーを作成してください。
+
+## 出力形式（JSON）
+{
+  "headline": "メインコピー（10〜20文字、インパクトのある短文）",
+  "subtext": "補足テキスト（20〜40文字、具体的な説明）",
+  "accent": "テーマカラー（warm/cool/festive のいずれか）"
+}
+
+## accentの使い分け
+- warm: 和食、居酒屋、カフェなど温かみのある業態（暖色系）
+- cool: バー、モダンレストランなど洗練された業態（寒色系）
+- festive: イベント、季節限定メニューなど華やかな場面（カラフル）
+
+## ルール
+- キャッチーで目を引く表現を使う
+- お客さんの食欲や好奇心を刺激する言葉を選ぶ
+- 季節感を意識する
+- JSON以外の文字列を出力しないこと`;
+
+export async function generatePopCopy(input: SnsPostInput): Promise<PopCopyOutput> {
+  try {
+    const now = new Date();
+    const month = now.getMonth() + 1;
+
+    const userMessage = [
+      `## 店舗情報`,
+      `店名: ${input.storeName}`,
+      `業態: ${input.genre}`,
+      `季節: ${month}月`,
+      input.request ? `\n## オーナーからのリクエスト\n${input.request}` : "",
+    ].join("\n");
+
+    const response = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 512,
+      system: POP_SYSTEM_PROMPT,
+      messages: [{ role: "user", content: userMessage }],
+    });
+
+    const textBlock = response.content.find((block) => block.type === "text");
+    if (!textBlock || textBlock.type !== "text") {
+      throw new Error("No text in response");
+    }
+
+    const parsed = JSON.parse(textBlock.text) as PopCopyOutput;
+    if (!parsed.headline || !parsed.subtext) {
+      throw new Error("Invalid response format");
+    }
+    return parsed;
+  } catch (error) {
+    console.error("POP copy generation error:", error);
+    return {
+      headline: "本日のおすすめ",
+      subtext: "スタッフイチオシの一品をご用意しました",
+      accent: "warm",
+    };
+  }
+}
+
 function fallbackWeeklyReport(input: WeeklyReportInput): WeeklyReportOutput {
   const totalRevenue = input.reports.reduce((sum, r) => sum + (r.revenue ?? 0), 0);
   const totalCustomers = input.reports.reduce((sum, r) => sum + (r.customer_count ?? 0), 0);

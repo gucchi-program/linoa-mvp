@@ -25,9 +25,14 @@ export function verifySignature(body: string, signature: string): boolean {
 // リプライメッセージ送信
 // replyToken を使って即座に返信する（無料）
 // ============================================
+// LINEメッセージ型（テキスト・画像に対応）
+export type LineMessage =
+  | { type: "text"; text: string }
+  | { type: "image"; originalContentUrl: string; previewImageUrl: string };
+
 export async function replyMessage(
   replyToken: string,
-  messages: Array<{ type: string; text: string }>
+  messages: LineMessage[]
 ): Promise<void> {
   const res = await fetch(`${LINE_API_BASE}/message/reply`, {
     method: "POST",
@@ -52,7 +57,7 @@ export async function replyMessage(
 // ============================================
 export async function pushMessage(
   to: string,
-  messages: Array<{ type: string; text: string }>
+  messages: LineMessage[]
 ): Promise<void> {
   const res = await fetch(`${LINE_API_BASE}/message/push`, {
     method: "POST",
