@@ -101,6 +101,30 @@ export interface ReportSession {
   updated_at: string;
 }
 
+// 賞味期限アイテム
+export interface ExpiryItem {
+  id: string;
+  store_id: string;
+  item_name: string;
+  expiry_date: string; // YYYY-MM-DD
+  quantity: string | null;
+  notified: boolean;
+  used: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// 賞味期限入力セッションのステップ
+export type ExpiryStep = "item_name" | "expiry_date" | "quantity" | "completed";
+
+// 賞味期限入力の一時データ（report_sessionsとは別にメモリで管理）
+export interface ExpiryInputState {
+  step: ExpiryStep;
+  item_name?: string;
+  expiry_date?: string;
+  quantity?: string;
+}
+
 // Claude APIによる所感分析結果
 export interface MemoAnalysis {
   feedback: string; // AIフィードバックメッセージ

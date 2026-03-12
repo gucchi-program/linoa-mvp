@@ -9,6 +9,9 @@ import {
   saveConversation,
   getOwnerByLineUserId,
   createDashboardToken,
+  getRecentConversations,
+  getRecentContexts,
+  getDailyReports,
 } from "@/lib/db";
 import { processOnboardingInput, getOnboardingQuestion } from "@/lib/onboarding";
 import {
@@ -18,8 +21,17 @@ import {
   processReportInput,
   cancelReportSession,
 } from "@/lib/report-session";
-import { analyzeMemo, generateSnsPost, generatePopCopy } from "@/lib/claude";
+import { analyzeMemo, generateSnsPost, generatePopCopy, chatWithContext } from "@/lib/claude";
 import { getWeather } from "@/lib/weather";
+import {
+  isExpiryTrigger,
+  isExpiryListTrigger,
+  startExpirySession,
+  getActiveExpirySession,
+  cancelExpirySession,
+  processExpiryInput,
+  getExpiryListMessage,
+} from "@/lib/expiry-session";
 import type { LineWebhookBody, LineWebhookEvent, ReportSession } from "@/types";
 
 // 「レポート」「レポート見せて」等のトリガー判定
@@ -208,6 +220,41 @@ async function handleMessage(event: LineWebhookEvent): Promise<void> {
     return;
   }
 
+  // 「賞味期限」トリガー → 賞味期限登録開始
+  if (isExpiryTrigger(userMessage)) {
+    const message = startExpirySession(store.id);
+    await replyMessage(event.replyToken, [
+      { type: "text", text: message },
+    ]);
+    return;
+  }
+
+  // 「期限一覧」トリガー → 登録済み賞味期限の一覧表示
+  if (isExpiryListTrigger(userMessage)) {
+    const message = await getExpiryListMessage(store.id);
+    await replyMessage(event.replyToken, [
+      { type: "text", text: message },
+    ]);
+    return;
+  }
+
+  // アクティブな賞味期限セッションがあれば優先処理
+  const expirySession = getActiveExpirySession(store.id);
+  if (expirySession) {
+    if (isCancelWord(userMessage)) {
+      cancelExpirySession(store.id);
+      await replyMessage(event.replyToken, [
+        { type: "text", text: "賞味期限の登録をキャンセルしました。" },
+      ]);
+      return;
+    }
+    const expiryResult = await processExpiryInput(store.id, userMessage);
+    await replyMessage(event.replyToken, [
+      { type: "text", text: expiryResult.message },
+    ]);
+    return;
+  }
+
   // アクティブな日報セッションを確認
   const activeSession = await getActiveSession(store.id);
 
@@ -220,23 +267,9 @@ async function handleMessage(event: LineWebhookEvent): Promise<void> {
     return;
   }
 
-  // アクティブセッションがない場合 → ヘルプメッセージ
+  // アクティブセッションがない場合 → AI秘書として自由対話
   if (!activeSession) {
-    await replyMessage(event.replyToken, [
-      {
-        type: "text",
-        text: [
-          `Linoaでできること：`,
-          ``,
-          `「日報」→ 今日の日報を入力`,
-          `「レポート」→ ダッシュボードを表示`,
-          `「SNS」→ SNS投稿文を自動生成`,
-          `「POP」→ 店頭POP画像を自動生成`,
-          ``,
-          `下のメニューからもお選びいただけます。`,
-        ].join("\n"),
-      },
-    ]);
+    await handleFreeChat(event.replyToken, store, userMessage);
     return;
   }
 
@@ -417,5 +450,41 @@ async function handlePopGenerate(
         `※ もう一度「POP」と送ると別パターンが生成されます`,
       ].join("\n"),
     },
+  ]);
+}
+
+// ============================================
+// 自由対話ハンドラ（AI秘書チャット）
+// トリガーに一致しない自由なメッセージに対して、
+// 店舗データを踏まえたAI応答を返す
+// ============================================
+async function handleFreeChat(
+  replyToken: string,
+  store: { id: string; store_name: string | null; genre: string | null; seat_count: number | null; opening_hours: string | null },
+  userMessage: string
+): Promise<void> {
+  // 並列でコンテキストデータを取得
+  const [recentReports, recentContexts, recentConversations] = await Promise.all([
+    getDailyReports(store.id, 14),
+    getRecentContexts(store.id, 20),
+    getRecentConversations(store.id, 10),
+  ]);
+
+  const reply = await chatWithContext(userMessage, {
+    storeName: store.store_name ?? "お店",
+    genre: store.genre ?? "飲食店",
+    seatCount: store.seat_count,
+    openingHours: store.opening_hours,
+    recentReports,
+    recentContexts,
+    recentConversations,
+  });
+
+  // 会話履歴を保存
+  await saveConversation(store.id, "user", userMessage);
+  await saveConversation(store.id, "assistant", reply);
+
+  await replyMessage(replyToken, [
+    { type: "text", text: reply },
   ]);
 }

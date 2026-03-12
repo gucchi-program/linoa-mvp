@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { Store, ReportSession, Owner, DashboardToken } from "@/types";
+import type { Store, ReportSession, Owner, DashboardToken, ExpiryItem } from "@/types";
 import crypto from "crypto";
 
 // ============================================
@@ -276,6 +276,50 @@ export async function getDailyReports(
 }
 
 // ============================================
+// 会話履歴取得（直近N件）
+// 自然言語対話のコンテキスト構築に使用
+// ============================================
+export async function getRecentConversations(
+  storeId: string,
+  limit: number = 10
+): Promise<{ role: "user" | "assistant"; content: string; created_at: string }[]> {
+  const { data, error } = await supabase
+    .from("conversations")
+    .select("role, content, created_at")
+    .eq("store_id", storeId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("getRecentConversations error:", error);
+    return [];
+  }
+  return (data ?? []).reverse();
+}
+
+// ============================================
+// 抽出コンテキスト取得（直近N件）
+// AI秘書の文脈理解に使用
+// ============================================
+export async function getRecentContexts(
+  storeId: string,
+  limit: number = 20
+): Promise<{ context_type: string; content: string; created_at: string }[]> {
+  const { data, error } = await supabase
+    .from("extracted_contexts")
+    .select("context_type, content, created_at")
+    .eq("store_id", storeId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("getRecentContexts error:", error);
+    return [];
+  }
+  return (data ?? []).reverse();
+}
+
+// ============================================
 // ダッシュボード認証トークン生成
 // 24時間有効のワンタイムトークン
 // ============================================
@@ -321,4 +365,107 @@ export async function verifyDashboardToken(
   }
 
   return data.owner_id;
+}
+
+// ============================================
+// 賞味期限アイテム登録
+// ============================================
+export async function createExpiryItem(params: {
+  storeId: string;
+  itemName: string;
+  expiryDate: string;
+  quantity?: string;
+}): Promise<ExpiryItem> {
+  const { data, error } = await supabase
+    .from("expiry_items")
+    .insert({
+      store_id: params.storeId,
+      item_name: params.itemName,
+      expiry_date: params.expiryDate,
+      quantity: params.quantity ?? null,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("createExpiryItem error:", error);
+    throw error;
+  }
+  return data;
+}
+
+// ============================================
+// 賞味期限アラート対象の取得
+// 期限がN日以内かつ未通知・未使用のアイテム
+// store情報も含めて返す（プッシュ通知に必要）
+// ============================================
+export async function getExpiringItems(
+  daysAhead: number = 2
+): Promise<(ExpiryItem & { stores: { line_user_id: string; store_name: string | null } })[]> {
+  const targetDate = new Date();
+  targetDate.setDate(targetDate.getDate() + daysAhead);
+  const dateStr = targetDate.toISOString().split("T")[0];
+
+  const { data, error } = await supabase
+    .from("expiry_items")
+    .select("*, stores(line_user_id, store_name)")
+    .eq("used", false)
+    .eq("notified", false)
+    .lte("expiry_date", dateStr)
+    .order("expiry_date", { ascending: true });
+
+  if (error) {
+    console.error("getExpiringItems error:", error);
+    return [];
+  }
+  return data ?? [];
+}
+
+// ============================================
+// 賞味期限アイテムの通知済み更新
+// ============================================
+export async function markExpiryNotified(itemIds: string[]): Promise<void> {
+  if (itemIds.length === 0) return;
+  const { error } = await supabase
+    .from("expiry_items")
+    .update({ notified: true })
+    .in("id", itemIds);
+
+  if (error) {
+    console.error("markExpiryNotified error:", error);
+  }
+}
+
+// ============================================
+// 店舗の有効な賞味期限アイテム一覧
+// ============================================
+export async function getActiveExpiryItems(
+  storeId: string
+): Promise<ExpiryItem[]> {
+  const { data, error } = await supabase
+    .from("expiry_items")
+    .select("*")
+    .eq("store_id", storeId)
+    .eq("used", false)
+    .order("expiry_date", { ascending: true });
+
+  if (error) {
+    console.error("getActiveExpiryItems error:", error);
+    return [];
+  }
+  return data ?? [];
+}
+
+// ============================================
+// 賞味期限アイテムを使い切り済みにする
+// ============================================
+export async function markExpiryUsed(itemId: string): Promise<void> {
+  const { error } = await supabase
+    .from("expiry_items")
+    .update({ used: true })
+    .eq("id", itemId);
+
+  if (error) {
+    console.error("markExpiryUsed error:", error);
+  }
 }

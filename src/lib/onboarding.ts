@@ -136,6 +136,7 @@ function buildCompletionResult(storeName: string | null): OnboardingResult {
     "「SNS」→ Instagram/X用の投稿文を自動生成",
     "「POP」→ 店頭POP画像を自動生成",
     "「レポート」→ 売上ダッシュボードを表示",
+    "「賞味期限」→ 食材の期限を登録・アラート通知",
     "",
     "画面下のメニューからもお選びいただけます。",
     "さっそく「日報」と送って、今日の記録を始めましょう！",

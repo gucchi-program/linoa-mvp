@@ -344,6 +344,114 @@ export async function generatePopCopy(input: SnsPostInput): Promise<PopCopyOutpu
   }
 }
 
+// ============================================
+// 自然言語対話（AI秘書チャット）
+// 店舗データ・日報・会話履歴を踏まえて自由な質問に回答
+// ============================================
+interface ChatContext {
+  storeName: string;
+  genre: string;
+  seatCount: number | null;
+  openingHours: string | null;
+  recentReports: {
+    report_date: string;
+    revenue: number | null;
+    customer_count: number | null;
+    reservation_count: number | null;
+    weather: string | null;
+    memo: string | null;
+  }[];
+  recentContexts: { context_type: string; content: string }[];
+  recentConversations: { role: "user" | "assistant"; content: string }[];
+}
+
+const CHAT_SYSTEM_PROMPT = `あなたは「Linoa（リノア）」という名前の、個人経営の飲食店向けAI経営秘書です。
+オーナーからの自由な質問に、店舗データを踏まえて回答します。
+
+## あなたの性格
+- 親しみやすく、頼れる秘書
+- データに基づいた具体的なアドバイスを出す
+- 短く簡潔に回答する（LINEのチャットなので長文は避ける）
+- ポジティブなトーンだが、課題は率直に伝える
+
+## できること
+- 売上・客数のトレンド分析
+- 曜日別・天候別の傾向の指摘
+- メニューや接客の改善提案
+- 集客アイデアの提案
+- オーナーの相談相手
+
+## ルール
+- 3〜5文程度で簡潔に回答する
+- 数字がある場合は具体的に引用する
+- 「〜してみてはいかがでしょうか」のような堅い敬語は避け、「〜してみませんか？」くらいの距離感で
+- テキストのみで回答（JSON不要）`;
+
+export async function chatWithContext(
+  userMessage: string,
+  context: ChatContext
+): Promise<string> {
+  try {
+    // 店舗情報をコンテキストとして組み立て
+    const contextParts: string[] = [
+      `## 店舗情報`,
+      `店名: ${context.storeName}`,
+      `業態: ${context.genre}`,
+    ];
+    if (context.seatCount) contextParts.push(`座席数: ${context.seatCount}席`);
+    if (context.openingHours) contextParts.push(`営業時間: ${context.openingHours}`);
+
+    // 直近の日報データ
+    if (context.recentReports.length > 0) {
+      contextParts.push("", `## 直近の日報（${context.recentReports.length}日分）`);
+      for (const r of context.recentReports) {
+        const parts = [r.report_date];
+        if (r.weather) parts.push(`天気:${r.weather}`);
+        if (r.revenue !== null) parts.push(`売上:${r.revenue.toLocaleString()}円`);
+        if (r.customer_count !== null) parts.push(`客数:${r.customer_count}人`);
+        if (r.memo) parts.push(`所感:${r.memo}`);
+        contextParts.push(parts.join(" / "));
+      }
+    }
+
+    // 抽出コンテキスト（店舗の蓄積知識）
+    if (context.recentContexts.length > 0) {
+      contextParts.push("", "## 蓄積された店舗情報");
+      for (const c of context.recentContexts) {
+        contextParts.push(`- [${c.context_type}] ${c.content}`);
+      }
+    }
+
+    // 会話履歴をmessages形式に変換
+    const messages: { role: "user" | "assistant"; content: string }[] = [];
+
+    // 過去の会話をコンテキストとして追加（直近のみ）
+    for (const conv of context.recentConversations) {
+      messages.push({ role: conv.role, content: conv.content });
+    }
+
+    // 今回のユーザーメッセージ
+    messages.push({ role: "user", content: userMessage });
+
+    const response = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 512,
+      system: CHAT_SYSTEM_PROMPT + "\n\n" + contextParts.join("\n"),
+      messages,
+    });
+
+    const textBlock = response.content.find((block) => block.type === "text");
+    if (!textBlock || textBlock.type !== "text") {
+      return "すみません、うまく回答できませんでした。もう一度お試しください。";
+    }
+
+    return textBlock.text;
+  } catch (error) {
+    console.error("Chat error:", error);
+    return "すみません、一時的にエラーが発生しました。もう一度お試しください。";
+  }
+}
+
 function fallbackWeeklyReport(input: WeeklyReportInput): WeeklyReportOutput {
   const totalRevenue = input.reports.reduce((sum, r) => sum + (r.revenue ?? 0), 0);
   const totalCustomers = input.reports.reduce((sum, r) => sum + (r.customer_count ?? 0), 0);
