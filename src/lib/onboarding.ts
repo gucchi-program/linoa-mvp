@@ -130,10 +130,15 @@ function buildCompletionResult(storeName: string | null): OnboardingResult {
   const message = [
     `ありがとうございます！「${name}」の登録が完了しました。`,
     "",
-    "Linoaでは毎日の日報を簡単に記録できます。",
-    "「日報」と送るだけで入力がスタートします。",
+    "Linoaでできることをご紹介します：",
     "",
-    "さっそく今日の日報を入力してみましょう！",
+    "「日報」→ 今日の売上・客数・所感を記録",
+    "「SNS」→ Instagram/X用の投稿文を自動生成",
+    "「POP」→ 店頭POP画像を自動生成",
+    "「レポート」→ 売上ダッシュボードを表示",
+    "",
+    "画面下のメニューからもお選びいただけます。",
+    "さっそく「日報」と送って、今日の記録を始めましょう！",
   ].join("\n");
 
   return { done: true, message };
