@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { Store, ReportSession, Owner, DashboardToken, ExpiryItem } from "@/types";
+import type { Store, ReportSession, Owner, DashboardToken, ExpiryItem, Staff, Shift } from "@/types";
 import crypto from "crypto";
 
 // ============================================
@@ -468,4 +468,125 @@ export async function markExpiryUsed(itemId: string): Promise<void> {
   if (error) {
     console.error("markExpiryUsed error:", error);
   }
+}
+
+// ============================================
+// スタッフ登録
+// ============================================
+export async function createStaff(
+  storeId: string,
+  name: string,
+  role: "full_time" | "part_time" = "part_time"
+): Promise<Staff> {
+  const { data, error } = await supabase
+    .from("staff")
+    .insert({ store_id: storeId, name, role })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("createStaff error:", error);
+    throw error;
+  }
+  return data;
+}
+
+// ============================================
+// 店舗の在籍スタッフ一覧
+// ============================================
+export async function getActiveStaff(storeId: string): Promise<Staff[]> {
+  const { data, error } = await supabase
+    .from("staff")
+    .select("*")
+    .eq("store_id", storeId)
+    .eq("active", true)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("getActiveStaff error:", error);
+    return [];
+  }
+  return data ?? [];
+}
+
+// ============================================
+// シフト登録
+// ============================================
+export async function createShift(params: {
+  storeId: string;
+  staffId: string;
+  shiftDate: string;
+  startTime: string;
+  endTime: string;
+  note?: string;
+}): Promise<Shift> {
+  const { data, error } = await supabase
+    .from("shifts")
+    .upsert(
+      {
+        store_id: params.storeId,
+        staff_id: params.staffId,
+        shift_date: params.shiftDate,
+        start_time: params.startTime,
+        end_time: params.endTime,
+        note: params.note ?? null,
+      },
+      { onConflict: "staff_id,shift_date" }
+    )
+    .select()
+    .single();
+
+  if (error) {
+    console.error("createShift error:", error);
+    throw error;
+  }
+  return data;
+}
+
+// ============================================
+// 指定期間のシフト一覧取得（スタッフ名付き）
+// ============================================
+export async function getShifts(
+  storeId: string,
+  startDate: string,
+  endDate: string
+): Promise<(Shift & { staff: { name: string } })[]> {
+  const { data, error } = await supabase
+    .from("shifts")
+    .select("*, staff(name)")
+    .eq("store_id", storeId)
+    .gte("shift_date", startDate)
+    .lte("shift_date", endDate)
+    .order("shift_date", { ascending: true })
+    .order("start_time", { ascending: true });
+
+  if (error) {
+    console.error("getShifts error:", error);
+    return [];
+  }
+  return data ?? [];
+}
+
+// ============================================
+// スタッフを名前で検索（部分一致）
+// ============================================
+export async function findStaffByName(
+  storeId: string,
+  name: string
+): Promise<Staff | null> {
+  const { data, error } = await supabase
+    .from("staff")
+    .select("*")
+    .eq("store_id", storeId)
+    .eq("active", true)
+    .ilike("name", `%${name}%`)
+    .limit(1)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    console.error("findStaffByName error:", error);
+    return null;
+  }
+  return data;
 }

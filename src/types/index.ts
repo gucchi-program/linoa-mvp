@@ -125,6 +125,28 @@ export interface ExpiryInputState {
   quantity?: string;
 }
 
+// スタッフ
+export interface Staff {
+  id: string;
+  store_id: string;
+  name: string;
+  role: "full_time" | "part_time";
+  active: boolean;
+  created_at: string;
+}
+
+// シフト
+export interface Shift {
+  id: string;
+  store_id: string;
+  staff_id: string;
+  shift_date: string; // YYYY-MM-DD
+  start_time: string; // "17:00"
+  end_time: string;   // "23:00"
+  note: string | null;
+  created_at: string;
+}
+
 // Claude APIによる所感分析結果
 export interface MemoAnalysis {
   feedback: string; // AIフィードバックメッセージ

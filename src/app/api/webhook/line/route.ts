@@ -32,6 +32,13 @@ import {
   processExpiryInput,
   getExpiryListMessage,
 } from "@/lib/expiry-session";
+import {
+  isShiftTrigger,
+  startShiftSession,
+  getActiveShiftSession,
+  cancelShiftSession,
+  processShiftInput,
+} from "@/lib/shift-session";
 import type { LineWebhookBody, LineWebhookEvent, ReportSession } from "@/types";
 
 // 「レポート」「レポート見せて」等のトリガー判定
@@ -251,6 +258,32 @@ async function handleMessage(event: LineWebhookEvent): Promise<void> {
     const expiryResult = await processExpiryInput(store.id, userMessage);
     await replyMessage(event.replyToken, [
       { type: "text", text: expiryResult.message },
+    ]);
+    return;
+  }
+
+  // 「シフト」トリガー → シフト管理メニュー
+  if (isShiftTrigger(userMessage)) {
+    const message = startShiftSession(store.id);
+    await replyMessage(event.replyToken, [
+      { type: "text", text: message },
+    ]);
+    return;
+  }
+
+  // アクティブなシフトセッションがあれば優先処理
+  const shiftSession = getActiveShiftSession(store.id);
+  if (shiftSession) {
+    if (isCancelWord(userMessage)) {
+      cancelShiftSession(store.id);
+      await replyMessage(event.replyToken, [
+        { type: "text", text: "シフト管理を終了しました。" },
+      ]);
+      return;
+    }
+    const shiftResult = await processShiftInput(store.id, userMessage);
+    await replyMessage(event.replyToken, [
+      { type: "text", text: shiftResult.message },
     ]);
     return;
   }
