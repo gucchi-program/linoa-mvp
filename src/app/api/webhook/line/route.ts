@@ -21,7 +21,7 @@ import {
   processReportInput,
   cancelReportSession,
 } from "@/lib/report-session";
-import { analyzeMemo, generateSnsPost, generatePopCopy, chatWithContext } from "@/lib/claude";
+import { analyzeMemo, generateSnsPost, generatePopCopy, chatWithContext, generateForecast, answerManualQuestion } from "@/lib/claude";
 import { getWeather } from "@/lib/weather";
 import {
   isExpiryTrigger,
@@ -39,6 +39,16 @@ import {
   cancelShiftSession,
   processShiftInput,
 } from "@/lib/shift-session";
+import {
+  isManualTrigger,
+  startManualSession,
+  getManualListMessage,
+  deleteManualByIndex,
+  processManualInput,
+  cancelManualSession,
+  getActiveManualSession,
+} from "@/lib/manual-session";
+import { getActiveExpiryItems, getManualPages } from "@/lib/db";
 import type { LineWebhookBody, LineWebhookEvent, ReportSession } from "@/types";
 
 // 「レポート」「レポート見せて」等のトリガー判定
@@ -57,6 +67,11 @@ function isSnsTrigger(message: string): boolean {
 function isPopTrigger(message: string): boolean {
   const triggers = ["POP", "pop", "ポップ", "ぽっぷ"];
   return triggers.some((t) => message.includes(t));
+}
+
+// 「仕込み」「予測」「来週」「需要」「仕入れ」等のトリガー判定
+function isForecastTrigger(message: string): boolean {
+  return /仕込み|予測|来週|需要|仕入れ/.test(message);
 }
 
 // Next.js App Router の Route Handler
@@ -285,6 +300,35 @@ async function handleMessage(event: LineWebhookEvent): Promise<void> {
     await replyMessage(event.replyToken, [
       { type: "text", text: shiftResult.message },
     ]);
+    return;
+  }
+
+  // 「マニュアル」を含むメッセージ → マニュアル機能
+  // マニュアルセッション中は登録フロー優先のため、トリガーより先にセッションを確認
+  const activeManualSession = await getActiveManualSession(store.id);
+  if (activeManualSession) {
+    if (isCancelWord(userMessage)) {
+      await cancelManualSession(activeManualSession);
+      await replyMessage(event.replyToken, [
+        { type: "text", text: "マニュアル登録をキャンセルしました。" },
+      ]);
+      return;
+    }
+    const manualResult = await processManualInput(activeManualSession, userMessage);
+    await replyMessage(event.replyToken, [
+      { type: "text", text: manualResult.message },
+    ]);
+    return;
+  }
+
+  if (isManualTrigger(userMessage)) {
+    await handleManual(event.replyToken, store, userMessage);
+    return;
+  }
+
+  // 「仕込み」「需要予測」等のトリガー → 需要予測・仕入れアドバイス
+  if (isForecastTrigger(userMessage)) {
+    await handleForecast(event.replyToken, store);
     return;
   }
 
@@ -520,4 +564,89 @@ async function handleFreeChat(
   await replyMessage(replyToken, [
     { type: "text", text: reply },
   ]);
+}
+
+// ============================================
+// 需要予測・仕入れアドバイスハンドラ
+// 過去30日日報 + 賞味期限在庫をClaudeに渡して予測生成
+// ============================================
+async function handleForecast(
+  replyToken: string,
+  store: { id: string; store_name: string | null; genre: string | null }
+): Promise<void> {
+  // 並列で日報と在庫を取得
+  const [reports, expiryItems] = await Promise.all([
+    getDailyReports(store.id, 30),
+    getActiveExpiryItems(store.id),
+  ]);
+
+  if (reports.length === 0) {
+    await replyMessage(replyToken, [
+      { type: "text", text: "今日もお疲れ様でした。" },
+    ]);
+    return;
+  }
+
+  const result = await generateForecast({
+    storeName: store.store_name ?? "お店",
+    genre: store.genre ?? "飲食店",
+    reports,
+    expiryItems: expiryItems.map((e) => ({
+      item_name: e.item_name,
+      expiry_date: e.expiry_date,
+      quantity: e.quantity,
+    })),
+  });
+
+  await replyMessage(replyToken, [
+    {
+      type: "text",
+      text: `【来週の需要予測】\n\n${result.forecast}`,
+    },
+    {
+      type: "text",
+      text: `【仕込み量アドバイス】\n\n${result.procurement}`,
+    },
+  ]);
+}
+
+// ============================================
+// マニュアルbotハンドラ
+// 「マニュアル登録」「マニュアル一覧」「マニュアル削除N」「マニュアルQA」を振り分け
+// ============================================
+async function handleManual(
+  replyToken: string,
+  store: { id: string; store_name: string | null },
+  userMessage: string
+): Promise<void> {
+  // 「マニュアル登録」
+  if (userMessage.includes("マニュアル登録")) {
+    const message = await startManualSession(store.id);
+    await replyMessage(replyToken, [{ type: "text", text: message }]);
+    return;
+  }
+
+  // 「マニュアル一覧」
+  if (userMessage.includes("マニュアル一覧")) {
+    const message = await getManualListMessage(store.id);
+    await replyMessage(replyToken, [{ type: "text", text: message }]);
+    return;
+  }
+
+  // 「マニュアル削除 N」
+  const deleteMatch = userMessage.match(/マニュアル削除\s*(\d+)/);
+  if (deleteMatch) {
+    const message = await deleteManualByIndex(store.id, deleteMatch[1]);
+    await replyMessage(replyToken, [{ type: "text", text: message }]);
+    return;
+  }
+
+  // それ以外の「マニュアル〇〇」→ Claudeがマニュアルから検索して回答
+  const pages = await getManualPages(store.id);
+  const answer = await answerManualQuestion({
+    storeName: store.store_name ?? "お店",
+    question: userMessage,
+    manualPages: pages.map((p) => ({ title: p.title, content: p.content })),
+  });
+  await replyMessage(replyToken, [{ type: "text", text: answer }]);
 }

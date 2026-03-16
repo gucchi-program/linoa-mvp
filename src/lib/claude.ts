@@ -452,6 +452,184 @@ export async function chatWithContext(
   }
 }
 
+// ============================================
+// 需要予測・仕込み量アドバイス生成
+// 過去30日の日報 + 賞味期限在庫を元に来週の予測を生成
+// ============================================
+interface ForecastInput {
+  storeName: string;
+  genre: string;
+  reports: {
+    report_date: string;
+    revenue: number | null;
+    customer_count: number | null;
+    weather: string | null;
+    memo: string | null;
+  }[];
+  expiryItems: {
+    item_name: string;
+    expiry_date: string;
+    quantity: string | null;
+  }[];
+}
+
+interface ForecastOutput {
+  forecast: string;     // 来週の予測サマリー
+  procurement: string;  // 仕込み量アドバイス
+}
+
+const FORECAST_SYSTEM_PROMPT = `あなたは「Linoa（リノア）」という名前の、個人経営の飲食店向けAI経営アドバイザーです。
+過去の日報データと現在の在庫情報を分析し、来週の需要予測と仕込み量アドバイスを以下のJSON形式で返してください。
+
+## 出力形式（JSON）
+{
+  "forecast": "来週の需要予測サマリー（3〜5行）",
+  "procurement": "仕込み量・仕入れアドバイス（3〜5行）"
+}
+
+## forecastに含める内容
+- 曜日別の客数傾向（データに基づく）
+- 天候パターンと売上の相関（あれば）
+- 来週の予想客数・売上レンジ
+
+## procurementに含める内容
+- 在庫アイテムの期限を加味した使用優先度
+- 仕込み量の増減提案（曜日別）
+- 廃棄ロスを減らすための具体的なアクション
+
+## ルール
+- 数字を使って具体的に分析する
+- 推測の場合は「〜と思われます」と明示する
+- LINEで読みやすいよう、短く区切る
+- JSON以外の文字列を出力しないこと`;
+
+export async function generateForecast(input: ForecastInput): Promise<ForecastOutput> {
+  try {
+    // 曜日別集計を事前計算
+    const dayStats: Record<string, { totalRevenue: number; totalCustomers: number; count: number }> = {};
+    const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
+
+    for (const r of input.reports) {
+      const date = new Date(r.report_date);
+      const day = dayNames[date.getDay()];
+      if (!dayStats[day]) dayStats[day] = { totalRevenue: 0, totalCustomers: 0, count: 0 };
+      dayStats[day].totalRevenue += r.revenue ?? 0;
+      dayStats[day].totalCustomers += r.customer_count ?? 0;
+      dayStats[day].count++;
+    }
+
+    const dayAvgLines = Object.entries(dayStats)
+      .map(([day, s]) => `${day}曜: 平均売上${Math.round(s.totalRevenue / s.count).toLocaleString()}円 / 平均客数${Math.round(s.totalCustomers / s.count)}人`)
+      .join("\n");
+
+    // 日報データをテキスト化（直近14日のみでトークン節約）
+    const recentReports = input.reports.slice(-14);
+    const reportLines = recentReports.map((r) => {
+      const parts = [r.report_date];
+      if (r.weather) parts.push(`天気:${r.weather}`);
+      if (r.revenue !== null) parts.push(`売上:${r.revenue.toLocaleString()}円`);
+      if (r.customer_count !== null) parts.push(`客数:${r.customer_count}人`);
+      if (r.memo) parts.push(`所感:${r.memo.substring(0, 50)}`);
+      return parts.join(" / ");
+    });
+
+    const expiryLines = input.expiryItems.length > 0
+      ? input.expiryItems.map((e) => `- ${e.item_name}（期限:${e.expiry_date}${e.quantity ? ` 残量:${e.quantity}` : ""}）`).join("\n")
+      : "（在庫アイテムなし）";
+
+    const userMessage = [
+      `## 店舗情報`,
+      `店名: ${input.storeName} / 業態: ${input.genre}`,
+      ``,
+      `## 曜日別平均（過去${input.reports.length}日）`,
+      dayAvgLines,
+      ``,
+      `## 直近14日の日報`,
+      ...reportLines,
+      ``,
+      `## 現在の在庫・賞味期限アイテム`,
+      expiryLines,
+    ].join("\n");
+
+    const response = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 1024,
+      system: FORECAST_SYSTEM_PROMPT,
+      messages: [{ role: "user", content: userMessage }],
+    });
+
+    const textBlock = response.content.find((b) => b.type === "text");
+    if (!textBlock || textBlock.type !== "text") {
+      return fallbackForecast();
+    }
+
+    const parsed = JSON.parse(textBlock.text) as ForecastOutput;
+    if (!parsed.forecast || !parsed.procurement) return fallbackForecast();
+    return parsed;
+  } catch (error) {
+    console.error("generateForecast error:", error);
+    return fallbackForecast();
+  }
+}
+
+function fallbackForecast(): ForecastOutput {
+  return {
+    forecast: "データが少ないため、正確な予測ができませんでした。日報を継続して入力すると精度が上がります。",
+    procurement: "過去のデータが蓄積されると、曜日別の仕込み量アドバイスができるようになります。",
+  };
+}
+
+// ============================================
+// マニュアル質問回答
+// 登録済みマニュアルページをコンテキストにして質問に答える
+// ============================================
+interface ManualQaInput {
+  storeName: string;
+  question: string;
+  manualPages: { title: string; content: string }[];
+}
+
+const MANUAL_QA_SYSTEM_PROMPT = `あなたは「Linoa（リノア）」という名前の、飲食店の新人スタッフをサポートするAIアシスタントです。
+登録されたマニュアルを参照して、スタッフからの質問に答えてください。
+
+## ルール
+- マニュアルに記載されている内容に基づいて回答する
+- マニュアルにない内容は「マニュアルには記載がありません」と正直に伝える
+- LINEで読みやすいよう、短く箇条書きで回答する（3〜5行程度）
+- 親しみやすく、初心者にわかりやすい表現を使う
+- テキストのみで回答（JSON不要）`;
+
+export async function answerManualQuestion(input: ManualQaInput): Promise<string> {
+  try {
+    if (input.manualPages.length === 0) {
+      return "まだマニュアルが登録されていません。\nオーナーに「マニュアル登録」と送って登録してもらってください。";
+    }
+
+    // マニュアルページをコンテキストとして組み立て
+    const manualContext = input.manualPages
+      .map((p, i) => `### マニュアル${i + 1}: ${p.title}\n${p.content}`)
+      .join("\n\n");
+
+    const systemWithManual = `${MANUAL_QA_SYSTEM_PROMPT}\n\n## 登録済みマニュアル\n${manualContext}`;
+
+    const response = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 512,
+      system: systemWithManual,
+      messages: [{ role: "user", content: input.question }],
+    });
+
+    const textBlock = response.content.find((b) => b.type === "text");
+    if (!textBlock || textBlock.type !== "text") {
+      return "すみません、回答の生成に失敗しました。もう一度お試しください。";
+    }
+    return textBlock.text;
+  } catch (error) {
+    console.error("answerManualQuestion error:", error);
+    return "すみません、一時的にエラーが発生しました。";
+  }
+}
+
 function fallbackWeeklyReport(input: WeeklyReportInput): WeeklyReportOutput {
   const totalRevenue = input.reports.reduce((sum, r) => sum + (r.revenue ?? 0), 0);
   const totalCustomers = input.reports.reduce((sum, r) => sum + (r.customer_count ?? 0), 0);

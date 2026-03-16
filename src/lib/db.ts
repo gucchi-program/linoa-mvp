@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { Store, ReportSession, Owner, DashboardToken, ExpiryItem, Staff, Shift } from "@/types";
+import type { Store, ReportSession, Owner, DashboardToken, ExpiryItem, Staff, Shift, ManualPage, ManualSession } from "@/types";
 import crypto from "crypto";
 
 // ============================================
@@ -565,6 +565,155 @@ export async function getShifts(
     return [];
   }
   return data ?? [];
+}
+
+// ============================================
+// 全店舗の日報を取得（本部ダッシュボード用）
+// 複数のstoreIdに対して直近N日分を一括取得する
+// ============================================
+export async function getDailyReportsForStores(
+  storeIds: string[],
+  days: number = 30
+): Promise<{ store_id: string; report_date: string; revenue: number | null; customer_count: number | null; weather: string | null; memo: string | null }[]> {
+  if (storeIds.length === 0) return [];
+
+  const fromDate = new Date();
+  fromDate.setDate(fromDate.getDate() - days);
+  const fromDateStr = fromDate.toISOString().split("T")[0];
+
+  const { data, error } = await supabase
+    .from("daily_reports")
+    .select("store_id, report_date, revenue, customer_count, weather, memo")
+    .in("store_id", storeIds)
+    .gte("report_date", fromDateStr)
+    .order("report_date", { ascending: true });
+
+  if (error) {
+    console.error("getDailyReportsForStores error:", error);
+    return [];
+  }
+  return data ?? [];
+}
+
+// ============================================
+// マニュアルページ登録
+// ============================================
+export async function createManualPage(
+  storeId: string,
+  title: string,
+  content: string
+): Promise<ManualPage> {
+  const { data, error } = await supabase
+    .from("manual_pages")
+    .insert({ store_id: storeId, title, content })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("createManualPage error:", error);
+    throw error;
+  }
+  return data;
+}
+
+// ============================================
+// 店舗のマニュアルページ一覧取得
+// ============================================
+export async function getManualPages(storeId: string): Promise<ManualPage[]> {
+  const { data, error } = await supabase
+    .from("manual_pages")
+    .select("*")
+    .eq("store_id", storeId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("getManualPages error:", error);
+    return [];
+  }
+  return data ?? [];
+}
+
+// ============================================
+// マニュアルページ削除（番号指定）
+// インデックスはgetManualPages()の順番に基づく
+// ============================================
+export async function deleteManualPage(pageId: string): Promise<void> {
+  const { error } = await supabase
+    .from("manual_pages")
+    .delete()
+    .eq("id", pageId);
+
+  if (error) {
+    console.error("deleteManualPage error:", error);
+    throw error;
+  }
+}
+
+// ============================================
+// マニュアルセッション取得（アクティブなもの）
+// partial unique indexで1店舗1セッションを保証
+// ============================================
+export async function getActiveManualSession(
+  storeId: string
+): Promise<ManualSession | null> {
+  const { data, error } = await supabase
+    .from("manual_sessions")
+    .select("*")
+    .eq("store_id", storeId)
+    .eq("status", "active")
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    console.error("getActiveManualSession error:", error);
+    throw error;
+  }
+  return data;
+}
+
+// ============================================
+// マニュアルセッション作成
+// ============================================
+export async function createManualSession(storeId: string): Promise<ManualSession> {
+  // 既存のアクティブセッションをキャンセル
+  await supabase
+    .from("manual_sessions")
+    .update({ status: "cancelled" })
+    .eq("store_id", storeId)
+    .eq("status", "active");
+
+  const { data, error } = await supabase
+    .from("manual_sessions")
+    .insert({ store_id: storeId })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("createManualSession error:", error);
+    throw error;
+  }
+  return data;
+}
+
+// ============================================
+// マニュアルセッション更新
+// ============================================
+export async function updateManualSession(
+  sessionId: string,
+  updates: Partial<Pick<ManualSession, "step" | "title" | "status">>
+): Promise<ManualSession> {
+  const { data, error } = await supabase
+    .from("manual_sessions")
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq("id", sessionId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("updateManualSession error:", error);
+    throw error;
+  }
+  return data;
 }
 
 // ============================================

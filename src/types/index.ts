@@ -163,6 +163,29 @@ export interface ClaudeResponse {
   extracted_contexts: Pick<ExtractedContext, "context_type" | "content">[];
 }
 
+// マニュアルページ
+export interface ManualPage {
+  id: string;
+  store_id: string;
+  title: string;
+  content: string;
+  created_at: string;
+}
+
+// マニュアル登録セッションのステップ定義
+export type ManualStep = "title" | "content" | "completed";
+
+// マニュアル登録セッション
+export interface ManualSession {
+  id: string;
+  store_id: string;
+  step: ManualStep;
+  title: string | null;
+  status: "active" | "completed" | "cancelled";
+  created_at: string;
+  updated_at: string;
+}
+
 // LINE Webhook イベント型（必要最小限）
 export interface LineWebhookEvent {
   type: string;

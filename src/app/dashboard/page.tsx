@@ -88,6 +88,19 @@ function DashboardIndex() {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-4">
+        {/* 本部ダッシュボード（複数店舗の横断比較） */}
+        {stores.length > 1 && (
+          <a
+            href={`/dashboard/overview?token=${token}`}
+            className="block bg-indigo-600 text-white rounded-lg shadow p-4 hover:bg-indigo-700 transition-colors"
+          >
+            <h2 className="text-lg font-semibold">本部ダッシュボード（全店舗比較）</h2>
+            <p className="text-sm text-indigo-200 mt-0.5">
+              {stores.length}店舗の売上・客数を横断比較する
+            </p>
+          </a>
+        )}
+
         {stores.map((store) => (
           <a
             key={store.id}
