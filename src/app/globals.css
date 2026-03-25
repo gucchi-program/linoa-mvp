@@ -21,3 +21,41 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@keyframes aurora {
+  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.7; }
+  33% { transform: translate(40px, -60px) scale(1.15); opacity: 0.9; }
+  66% { transform: translate(-30px, 30px) scale(0.85); opacity: 0.6; }
+}
+
+@keyframes aurora2 {
+  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.5; }
+  33% { transform: translate(-50px, 40px) scale(1.2); opacity: 0.8; }
+  66% { transform: translate(30px, -20px) scale(0.9); opacity: 0.4; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-aurora {
+  animation: aurora 10s ease-in-out infinite;
+}
+.animate-aurora2 {
+  animation: aurora2 14s ease-in-out infinite;
+}
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-aurora, .animate-aurora2, .animate-float {
+    animation: none;
+  }
+}
