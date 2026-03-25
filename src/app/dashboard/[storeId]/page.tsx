@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
+import { DAY_NAMES } from "@/lib/utils";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, BarChart, Bar, Legend, Cell,
@@ -432,7 +433,6 @@ function calcWeekComparison(reports: StoreData["reports"]) {
 // ============================================
 // 曜日別統計
 // ============================================
-const DAY_NAMES = ["日", "月", "火", "水", "木", "金", "土"];
 
 function getDayOfWeek(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");

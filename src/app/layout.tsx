@@ -16,23 +16,24 @@ const geistSans = Geist({
 export const metadata: Metadata = {
   metadataBase: new URL("https://li-noa.jp"),
   title: {
-    default: "Linoa - 飲食店の経営をサポートするAI秘書 | LINE連携",
+    default: "Linoa - 飲食店専属AI × ホームページ制作",
     template: "%s | Linoa",
   },
   description:
-    "飲食店オーナー向けAI秘書サービス。LINEで日報を送るだけで、売上分析・経営アドバイス・SNS投稿作成まで。個人経営の飲食店の業務効率化を支援します。",
+    "LINEに送るだけでHPもGoogleもInstagramも自動更新。使い続けるほどあなたのお店だけのAIが育っていく。個人飲食店向けのHP制作＋LINE連携AIサービス。",
   keywords: [
     "飲食店",
+    "ホームページ制作",
+    "LP制作",
     "AI秘書",
-    "日報",
-    "売上分析",
     "LINE",
-    "経営支援",
-    "飲食店経営",
-    "業務効率化",
     "飲食店DX",
     "個人経営",
     "売上管理",
+    "SNS自動投稿",
+    "飲食店AI",
+    "店舗専属AI",
+    "飲食店集客",
   ],
   authors: [{ name: "Linoa" }],
   creator: "Linoa",
@@ -40,9 +41,9 @@ export const metadata: Metadata = {
     canonical: "/",
   },
   openGraph: {
-    title: "Linoa - 飲食店の経営をサポートするAI秘書",
+    title: "Linoa - 飲食店専属AI × ホームページ制作",
     description:
-      "LINEで日報を送るだけ。売上分析・経営アドバイスで飲食店オーナーの毎日をサポートするAI秘書サービスです。",
+      "LINEに送るだけでHP・Google・Instagramが自動更新。使い続けるほどあなたのお店だけのAIが育っていく。",
     url: "https://li-noa.jp",
     siteName: "Linoa",
     locale: "ja_JP",
@@ -50,9 +51,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Linoa - 飲食店の経営をサポートするAI秘書",
+    title: "Linoa - 飲食店専属AI × ホームページ制作",
     description:
-      "LINEで日報を送るだけ。売上分析・経営アドバイスで飲食店オーナーの毎日をサポートします。",
+      "LINEに送るだけでHP・Google・Instagramが自動更新。使い続けるほどあなたのお店だけのAIが育っていく。",
   },
   verification: {
     google: GOOGLE_SITE_VERIFICATION,

@@ -2,11 +2,16 @@
 // Linoa MVP 型定義
 // ============================================
 
-// オーナーマスタ（Sprint 4で分離）
+// オーナーマスタ（Sprint 4で分離、Sprint 9でマルチテナント対応）
 export interface Owner {
   id: string;
   line_user_id: string;
   owner_name: string | null;
+  // Sprint 9追加: テナント識別・LINEチャネル認証情報
+  subdomain: string | null;               // "clientA" → clientA.li-noa.jp
+  line_channel_secret: string | null;     // テナント固有チャネルシークレット
+  line_channel_access_token: string | null; // テナント固有アクセストークン
+  is_active: boolean;                     // テナントが有効か
   created_at: string;
   updated_at: string;
 }
@@ -161,29 +166,6 @@ export interface ClaudeResponse {
   reply: string; // LINEに返すメッセージ
   daily_report: Partial<DailyReport> | null;
   extracted_contexts: Pick<ExtractedContext, "context_type" | "content">[];
-}
-
-// マニュアルページ
-export interface ManualPage {
-  id: string;
-  store_id: string;
-  title: string;
-  content: string;
-  created_at: string;
-}
-
-// マニュアル登録セッションのステップ定義
-export type ManualStep = "title" | "content" | "completed";
-
-// マニュアル登録セッション
-export interface ManualSession {
-  id: string;
-  store_id: string;
-  step: ManualStep;
-  title: string | null;
-  status: "active" | "completed" | "cancelled";
-  created_at: string;
-  updated_at: string;
 }
 
 // LINE Webhook イベント型（必要最小限）

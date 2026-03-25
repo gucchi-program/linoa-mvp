@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { DAY_NAMES } from "./utils";
 import type { MemoAnalysis } from "@/types";
 
 // Anthropic SDK クライアント
@@ -507,11 +508,10 @@ export async function generateForecast(input: ForecastInput): Promise<ForecastOu
   try {
     // 曜日別集計を事前計算
     const dayStats: Record<string, { totalRevenue: number; totalCustomers: number; count: number }> = {};
-    const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
 
     for (const r of input.reports) {
       const date = new Date(r.report_date);
-      const day = dayNames[date.getDay()];
+      const day = DAY_NAMES[date.getDay()];
       if (!dayStats[day]) dayStats[day] = { totalRevenue: 0, totalCustomers: 0, count: 0 };
       dayStats[day].totalRevenue += r.revenue ?? 0;
       dayStats[day].totalCustomers += r.customer_count ?? 0;
@@ -579,56 +579,6 @@ function fallbackForecast(): ForecastOutput {
   };
 }
 
-// ============================================
-// マニュアル質問回答
-// 登録済みマニュアルページをコンテキストにして質問に答える
-// ============================================
-interface ManualQaInput {
-  storeName: string;
-  question: string;
-  manualPages: { title: string; content: string }[];
-}
-
-const MANUAL_QA_SYSTEM_PROMPT = `あなたは「Linoa（リノア）」という名前の、飲食店の新人スタッフをサポートするAIアシスタントです。
-登録されたマニュアルを参照して、スタッフからの質問に答えてください。
-
-## ルール
-- マニュアルに記載されている内容に基づいて回答する
-- マニュアルにない内容は「マニュアルには記載がありません」と正直に伝える
-- LINEで読みやすいよう、短く箇条書きで回答する（3〜5行程度）
-- 親しみやすく、初心者にわかりやすい表現を使う
-- テキストのみで回答（JSON不要）`;
-
-export async function answerManualQuestion(input: ManualQaInput): Promise<string> {
-  try {
-    if (input.manualPages.length === 0) {
-      return "まだマニュアルが登録されていません。\nオーナーに「マニュアル登録」と送って登録してもらってください。";
-    }
-
-    // マニュアルページをコンテキストとして組み立て
-    const manualContext = input.manualPages
-      .map((p, i) => `### マニュアル${i + 1}: ${p.title}\n${p.content}`)
-      .join("\n\n");
-
-    const systemWithManual = `${MANUAL_QA_SYSTEM_PROMPT}\n\n## 登録済みマニュアル\n${manualContext}`;
-
-    const response = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 512,
-      system: systemWithManual,
-      messages: [{ role: "user", content: input.question }],
-    });
-
-    const textBlock = response.content.find((b) => b.type === "text");
-    if (!textBlock || textBlock.type !== "text") {
-      return "すみません、回答の生成に失敗しました。もう一度お試しください。";
-    }
-    return textBlock.text;
-  } catch (error) {
-    console.error("answerManualQuestion error:", error);
-    return "すみません、一時的にエラーが発生しました。";
-  }
-}
 
 function fallbackWeeklyReport(input: WeeklyReportInput): WeeklyReportOutput {
   const totalRevenue = input.reports.reduce((sum, r) => sum + (r.revenue ?? 0), 0);

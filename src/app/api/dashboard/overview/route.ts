@@ -10,12 +10,12 @@ import { verifyDashboardToken, getStoresByOwnerId, getDailyReportsForStores } fr
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get("token");
   if (!token) {
-    return NextResponse.json({ error: "Token required" }, { status: 401 });
+    return NextResponse.json({ error: "トークンが必要です" }, { status: 401 });
   }
 
   const ownerId = await verifyDashboardToken(token);
   if (!ownerId) {
-    return NextResponse.json({ error: "Invalid or expired token" }, { status: 401 });
+    return NextResponse.json({ error: "無効または期限切れのトークンです" }, { status: 401 });
   }
 
   // オーナーの全店舗を取得

@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getDailyReports, getRecentContexts } from "./db";
+import { DAY_NAMES } from "./utils";
 
 // AI施策提案エンジン
 // 日報データのパターンを分析し、具体的なアクション提案を生成する
@@ -70,10 +71,9 @@ export async function generateSuggestions(input: SuggestionInput): Promise<Sugge
 
     // 曜日別統計
     const dayStats: Record<string, { revenue: number[]; customers: number[] }> = {};
-    const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
     for (const r of reports) {
       const d = new Date(r.report_date + "T00:00:00");
-      const day = dayNames[d.getDay()];
+      const day = DAY_NAMES[d.getDay()];
       if (!dayStats[day]) dayStats[day] = { revenue: [], customers: [] };
       dayStats[day].revenue.push(r.revenue ?? 0);
       dayStats[day].customers.push(r.customer_count ?? 0);

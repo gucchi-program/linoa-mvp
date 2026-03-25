@@ -1,4 +1,5 @@
 import { createExpiryItem, getActiveExpiryItems } from "./db";
+import { parseJapaneseDate } from "./utils";
 import type { ExpiryStep } from "@/types";
 
 // ============================================
@@ -96,7 +97,7 @@ export async function processExpiryInput(
     }
 
     case "expiry_date": {
-      const parsed = parseExpiryDate(userInput.trim());
+      const parsed = parseJapaneseDate(userInput.trim());
       if (!parsed) {
         return {
           done: false,
@@ -170,69 +171,3 @@ export async function getExpiryListMessage(storeId: string): Promise<string> {
   return [`賞味期限一覧（${items.length}件）`, "", ...lines, "", "「賞味期限」で新規登録できます。"].join("\n");
 }
 
-// ============================================
-// 日付パーサー
-// 「3/15」「2026-03-15」「3日後」「明日」「明後日」に対応
-// ============================================
-function parseExpiryDate(input: string): string | null {
-  const now = new Date();
-  const jstOffset = 9 * 60 * 60 * 1000;
-  const jstNow = new Date(now.getTime() + jstOffset);
-
-  // 「N日後」パターン
-  const daysLaterMatch = input.match(/(\d+)\s*日\s*後/);
-  if (daysLaterMatch) {
-    const days = parseInt(daysLaterMatch[1]);
-    const target = new Date(jstNow.getTime() + days * 24 * 60 * 60 * 1000);
-    return target.toISOString().split("T")[0];
-  }
-
-  // 「明日」「明後日」「今日」
-  if (input === "今日") {
-    return jstNow.toISOString().split("T")[0];
-  }
-  if (input === "明日") {
-    const target = new Date(jstNow.getTime() + 1 * 24 * 60 * 60 * 1000);
-    return target.toISOString().split("T")[0];
-  }
-  if (input === "明後日") {
-    const target = new Date(jstNow.getTime() + 2 * 24 * 60 * 60 * 1000);
-    return target.toISOString().split("T")[0];
-  }
-
-  // 「YYYY-MM-DD」パターン
-  const isoMatch = input.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (isoMatch) {
-    const [, y, m, d] = isoMatch;
-    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
-  }
-
-  // 「M/D」パターン（年は今年、過去日なら来年）
-  const slashMatch = input.match(/^(\d{1,2})[/／](\d{1,2})$/);
-  if (slashMatch) {
-    const month = parseInt(slashMatch[1]);
-    const day = parseInt(slashMatch[2]);
-    let year = jstNow.getFullYear();
-    const candidate = new Date(year, month - 1, day);
-    // 過去の日付なら来年と解釈
-    if (candidate < new Date(jstNow.getFullYear(), jstNow.getMonth(), jstNow.getDate())) {
-      year += 1;
-    }
-    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  }
-
-  // 「M月D日」パターン
-  const jpMatch = input.match(/(\d{1,2})\s*月\s*(\d{1,2})\s*日/);
-  if (jpMatch) {
-    const month = parseInt(jpMatch[1]);
-    const day = parseInt(jpMatch[2]);
-    let year = jstNow.getFullYear();
-    const candidate = new Date(year, month - 1, day);
-    if (candidate < new Date(jstNow.getFullYear(), jstNow.getMonth(), jstNow.getDate())) {
-      year += 1;
-    }
-    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  }
-
-  return null;
-}

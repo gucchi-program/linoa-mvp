@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { Store, ReportSession, Owner, DashboardToken, ExpiryItem, Staff, Shift, ManualPage, ManualSession } from "@/types";
+import type { Store, ReportSession, Owner, DashboardToken, ExpiryItem, Staff, Shift } from "@/types";
 import crypto from "crypto";
 
 // ============================================
@@ -206,6 +206,49 @@ export async function saveConversation(
     console.error("saveConversation error:", error);
     throw error;
   }
+}
+
+// ============================================
+// オーナー取得（IDから）
+// マルチテナントWebhookで使用
+// ============================================
+export async function getOwnerById(
+  ownerId: string
+): Promise<Owner | null> {
+  const { data, error } = await supabase
+    .from("owners")
+    .select("*")
+    .eq("id", ownerId)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    console.error("getOwnerById error:", error);
+    throw error;
+  }
+  return data;
+}
+
+// ============================================
+// オーナー取得（サブドメインから）
+// middleware.tsでサブドメイン→owner_id解決に使用
+// ============================================
+export async function getOwnerBySubdomain(
+  subdomain: string
+): Promise<Owner | null> {
+  const { data, error } = await supabase
+    .from("owners")
+    .select("*")
+    .eq("subdomain", subdomain)
+    .eq("is_active", true)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    console.error("getOwnerBySubdomain error:", error);
+    return null;
+  }
+  return data;
 }
 
 // ============================================
@@ -593,127 +636,6 @@ export async function getDailyReportsForStores(
     return [];
   }
   return data ?? [];
-}
-
-// ============================================
-// マニュアルページ登録
-// ============================================
-export async function createManualPage(
-  storeId: string,
-  title: string,
-  content: string
-): Promise<ManualPage> {
-  const { data, error } = await supabase
-    .from("manual_pages")
-    .insert({ store_id: storeId, title, content })
-    .select()
-    .single();
-
-  if (error) {
-    console.error("createManualPage error:", error);
-    throw error;
-  }
-  return data;
-}
-
-// ============================================
-// 店舗のマニュアルページ一覧取得
-// ============================================
-export async function getManualPages(storeId: string): Promise<ManualPage[]> {
-  const { data, error } = await supabase
-    .from("manual_pages")
-    .select("*")
-    .eq("store_id", storeId)
-    .order("created_at", { ascending: true });
-
-  if (error) {
-    console.error("getManualPages error:", error);
-    return [];
-  }
-  return data ?? [];
-}
-
-// ============================================
-// マニュアルページ削除（番号指定）
-// インデックスはgetManualPages()の順番に基づく
-// ============================================
-export async function deleteManualPage(pageId: string): Promise<void> {
-  const { error } = await supabase
-    .from("manual_pages")
-    .delete()
-    .eq("id", pageId);
-
-  if (error) {
-    console.error("deleteManualPage error:", error);
-    throw error;
-  }
-}
-
-// ============================================
-// マニュアルセッション取得（アクティブなもの）
-// partial unique indexで1店舗1セッションを保証
-// ============================================
-export async function getActiveManualSession(
-  storeId: string
-): Promise<ManualSession | null> {
-  const { data, error } = await supabase
-    .from("manual_sessions")
-    .select("*")
-    .eq("store_id", storeId)
-    .eq("status", "active")
-    .single();
-
-  if (error) {
-    if (error.code === "PGRST116") return null;
-    console.error("getActiveManualSession error:", error);
-    throw error;
-  }
-  return data;
-}
-
-// ============================================
-// マニュアルセッション作成
-// ============================================
-export async function createManualSession(storeId: string): Promise<ManualSession> {
-  // 既存のアクティブセッションをキャンセル
-  await supabase
-    .from("manual_sessions")
-    .update({ status: "cancelled" })
-    .eq("store_id", storeId)
-    .eq("status", "active");
-
-  const { data, error } = await supabase
-    .from("manual_sessions")
-    .insert({ store_id: storeId })
-    .select()
-    .single();
-
-  if (error) {
-    console.error("createManualSession error:", error);
-    throw error;
-  }
-  return data;
-}
-
-// ============================================
-// マニュアルセッション更新
-// ============================================
-export async function updateManualSession(
-  sessionId: string,
-  updates: Partial<Pick<ManualSession, "step" | "title" | "status">>
-): Promise<ManualSession> {
-  const { data, error } = await supabase
-    .from("manual_sessions")
-    .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq("id", sessionId)
-    .select()
-    .single();
-
-  if (error) {
-    console.error("updateManualSession error:", error);
-    throw error;
-  }
-  return data;
 }
 
 // ============================================

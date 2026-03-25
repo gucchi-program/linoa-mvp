@@ -1,5 +1,6 @@
 import { createStaff, getActiveStaff, createShift, getShifts, findStaffByName } from "./db";
-import type { Staff } from "@/types";
+import { DAY_NAMES, getJstNow, parseJapaneseDate } from "./utils";
+import type { Staff, Shift } from "@/types";
 
 // ============================================
 // シフト管理セッション
@@ -191,7 +192,7 @@ async function handleAddShiftStaff(session: ShiftSession, input: string): Promis
 
 // シフト登録: 日付入力
 async function handleAddShiftDate(session: ShiftSession, input: string): Promise<{ done: boolean; message: string }> {
-  const date = parseShiftDate(input.trim());
+  const date = parseJapaneseDate(input.trim());
   if (!date) {
     return {
       done: false,
@@ -262,7 +263,7 @@ async function formatShiftList(storeId: string, startDate: string, endDate: stri
   // 日付ごとにグループ化
   const grouped = new Map<string, { name: string; start: string; end: string }[]>();
   for (const s of shifts) {
-    const staffData = s.staff as unknown as { name: string };
+    const staffData = (s as Shift & { staff: { name: string } }).staff;
     const existing = grouped.get(s.shift_date) ?? [];
     existing.push({ name: staffData.name, start: s.start_time, end: s.end_time });
     grouped.set(s.shift_date, existing);
@@ -283,7 +284,6 @@ async function formatShiftList(storeId: string, startDate: string, endDate: stri
 // ============================================
 // ユーティリティ
 // ============================================
-const DAY_NAMES = ["日", "月", "火", "水", "木", "金", "土"];
 
 function getDayOfWeek(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
@@ -291,11 +291,7 @@ function getDayOfWeek(dateStr: string): string {
 }
 
 function getWeekRange(weeksAhead: number): { start: string; end: string } {
-  const now = new Date();
-  const jstOffset = 9 * 60 * 60 * 1000;
-  const jstNow = new Date(now.getTime() + jstOffset);
-
-  // 今週の月曜日を起点に
+  const jstNow = getJstNow();
   const dayOfWeek = jstNow.getDay();
   const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
 
@@ -309,76 +305,4 @@ function getWeekRange(weeksAhead: number): { start: string; end: string } {
     start: monday.toISOString().split("T")[0],
     end: sunday.toISOString().split("T")[0],
   };
-}
-
-// 日付パーサー（賞味期限と共通ロジック）
-function parseShiftDate(input: string): string | null {
-  const now = new Date();
-  const jstOffset = 9 * 60 * 60 * 1000;
-  const jstNow = new Date(now.getTime() + jstOffset);
-
-  // 「今日」「明日」「明後日」
-  if (input === "今日") return jstNow.toISOString().split("T")[0];
-  if (input === "明日") {
-    const t = new Date(jstNow); t.setDate(t.getDate() + 1);
-    return t.toISOString().split("T")[0];
-  }
-  if (input === "明後日") {
-    const t = new Date(jstNow); t.setDate(t.getDate() + 2);
-    return t.toISOString().split("T")[0];
-  }
-
-  // 「月曜」「火曜」等 → 次のその曜日
-  const dowMatch = input.match(/^(月|火|水|木|金|土|日)曜?$/);
-  if (dowMatch) {
-    const targetDow = DAY_NAMES.indexOf(dowMatch[1]);
-    const currentDow = jstNow.getDay();
-    let diff = targetDow - currentDow;
-    if (diff <= 0) diff += 7;
-    const target = new Date(jstNow);
-    target.setDate(jstNow.getDate() + diff);
-    return target.toISOString().split("T")[0];
-  }
-
-  // 「N日後」
-  const daysLaterMatch = input.match(/(\d+)\s*日\s*後/);
-  if (daysLaterMatch) {
-    const days = parseInt(daysLaterMatch[1]);
-    const t = new Date(jstNow); t.setDate(t.getDate() + days);
-    return t.toISOString().split("T")[0];
-  }
-
-  // 「YYYY-MM-DD」
-  const isoMatch = input.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (isoMatch) {
-    return `${isoMatch[1]}-${isoMatch[2].padStart(2, "0")}-${isoMatch[3].padStart(2, "0")}`;
-  }
-
-  // 「M/D」
-  const slashMatch = input.match(/^(\d{1,2})[/／](\d{1,2})$/);
-  if (slashMatch) {
-    const month = parseInt(slashMatch[1]);
-    const day = parseInt(slashMatch[2]);
-    let year = jstNow.getFullYear();
-    const candidate = new Date(year, month - 1, day);
-    if (candidate < new Date(jstNow.getFullYear(), jstNow.getMonth(), jstNow.getDate())) {
-      year += 1;
-    }
-    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  }
-
-  // 「M月D日」
-  const jpMatch = input.match(/(\d{1,2})\s*月\s*(\d{1,2})\s*日/);
-  if (jpMatch) {
-    const month = parseInt(jpMatch[1]);
-    const day = parseInt(jpMatch[2]);
-    let year = jstNow.getFullYear();
-    const candidate = new Date(year, month - 1, day);
-    if (candidate < new Date(jstNow.getFullYear(), jstNow.getMonth(), jstNow.getDate())) {
-      year += 1;
-    }
-    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  }
-
-  return null;
 }
