@@ -7,13 +7,32 @@ function JsonLd() {
     "@type": "Organization",
     name: "Linoa",
     url: "https://li-noa.jp",
+    logo: "https://li-noa.jp/icon.png",
     description: "個人飲食店向けのHP制作＋LINE連携AI秘書サービス。",
+    sameAs: ["https://x.com/panaentre"],
     contactPoint: {
       "@type": "ContactPoint",
       email: "contact@li-noa.jp",
       contactType: "customer service",
       availableLanguage: "Japanese",
     },
+  };
+
+  // LocalBusiness スキーマ: ローカル検索・Googleマップへの露出に効果的
+  const localBusiness = {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    name: "Linoa",
+    url: "https://li-noa.jp",
+    description:
+      "個人飲食店向けのHP制作＋LINE連携AI秘書サービス。LINEに送るだけでHP・Google・Instagramが自動更新。",
+    email: "contact@li-noa.jp",
+    priceRange: "¥¥",
+    areaServed: {
+      "@type": "Country",
+      name: "Japan",
+    },
+    serviceType: ["ホームページ制作", "AI秘書", "LINE連携", "SNS自動投稿"],
   };
 
   const softwareApp = {
@@ -92,6 +111,10 @@ function JsonLd() {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqPage) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusiness) }}
       />
     </>
   );

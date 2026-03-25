@@ -5,7 +5,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   return [
     {
       url: "https://li-noa.jp",
-      lastModified: new Date(),
+      lastModified: new Date("2026-03-25"),
       changeFrequency: "weekly",
       priority: 1,
     },

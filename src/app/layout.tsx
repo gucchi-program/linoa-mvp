@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     template: "%s | Linoa",
   },
   description:
-    "LINEに送るだけでHPもGoogleもInstagramも自動更新。使い続けるほどあなたのお店だけのAIが育っていく。個人飲食店向けのHP制作＋LINE連携AIサービス。",
+    "飲食店専属AI秘書「Linoa」。LINEに送るだけでHP・Google・Instagramが自動更新。HP制作49,800円〜。使うほどお店専属AIが育ちます。個人経営の飲食店向け。",
   keywords: [
     "飲食店",
     "ホームページ制作",
@@ -48,12 +48,22 @@ export const metadata: Metadata = {
     siteName: "Linoa",
     locale: "ja_JP",
     type: "website",
+    images: [
+      {
+        url: "https://li-noa.jp/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Linoa - 飲食店専属AI × ホームページ制作",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Linoa - 飲食店専属AI × ホームページ制作",
     description:
       "LINEに送るだけでHP・Google・Instagramが自動更新。使い続けるほどあなたのお店だけのAIが育っていく。",
+    images: ["https://li-noa.jp/og-image.png"],
+    creator: "@panaentre",
   },
   verification: {
     google: GOOGLE_SITE_VERIFICATION,
