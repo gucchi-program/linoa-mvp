@@ -8,6 +8,78 @@ import { supabase } from "./supabase";
 import type { Store } from "@/types";
 
 // ============================================
+// daily_sales テーブル
+// ============================================
+
+// 売上をUPSERT（同日2回目の入力は上書き）
+export async function upsertDailySale(params: {
+  storeId: string;
+  date: string; // YYYY-MM-DD
+  revenue: number | null;
+  customerCount: number | null;
+  memo?: string | null;
+}): Promise<void> {
+  const averageSpend =
+    params.revenue && params.customerCount && params.customerCount > 0
+      ? Math.round(params.revenue / params.customerCount)
+      : null;
+
+  const { error } = await supabase.from("daily_sales").upsert(
+    {
+      store_id: params.storeId,
+      date: params.date,
+      revenue: params.revenue,
+      customer_count: params.customerCount,
+      average_spend: averageSpend,
+      memo: params.memo ?? null,
+      source: "manual_line",
+    },
+    { onConflict: "store_id,date" }
+  );
+
+  if (error) {
+    console.error("upsertDailySale error:", error);
+    throw error;
+  }
+}
+
+// 今月の売上サマリーを返す
+export async function getMonthlySummary(
+  storeId: string,
+  year: number,
+  month: number
+): Promise<{
+  totalRevenue: number;
+  totalCustomers: number;
+  businessDays: number;
+  avgDailyRevenue: number;
+}> {
+  // 月の開始日・終了日を計算
+  const from = `${year}-${String(month).padStart(2, "0")}-01`;
+  const to = `${year}-${String(month).padStart(2, "0")}-31`; // 31日以降は存在しないのでDBが自動で調整
+
+  const { data, error } = await supabase
+    .from("daily_sales")
+    .select("revenue, customer_count")
+    .eq("store_id", storeId)
+    .gte("date", from)
+    .lte("date", to);
+
+  if (error) {
+    console.error("getMonthlySummary error:", error);
+    return { totalRevenue: 0, totalCustomers: 0, businessDays: 0, avgDailyRevenue: 0 };
+  }
+
+  const records = data ?? [];
+  const totalRevenue = records.reduce((sum, r) => sum + (r.revenue ?? 0), 0);
+  const totalCustomers = records.reduce((sum, r) => sum + (r.customer_count ?? 0), 0);
+  const businessDays = records.filter((r) => r.revenue != null).length;
+  const avgDailyRevenue = businessDays > 0 ? Math.round(totalRevenue / businessDays) : 0;
+
+  return { totalRevenue, totalCustomers, businessDays, avgDailyRevenue };
+}
+
+// ============================================
 // stores テーブル
 // ============================================
 

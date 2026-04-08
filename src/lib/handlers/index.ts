@@ -6,6 +6,7 @@
 // ============================================
 
 import { handleCasual } from "./casual";
+import { handleSalesInput } from "./sales-input";
 import type { Store, MessageIntent } from "@/types";
 
 export async function routeToHandler(
@@ -19,8 +20,10 @@ export async function routeToHandler(
       // questionもcasualと同じハンドラーで処理（Step 5で専用ハンドラーに分離）
       return handleCasual(store, message);
 
-    // Step 3以降で実装予定のハンドラー
     case "sales_input":
+      return handleSalesInput(store, message);
+
+    // Step 4以降で実装予定のハンドラー
     case "customer_note":
     case "customer_query":
     case "inventory":
