@@ -148,6 +148,34 @@ export async function updateStore(
 }
 
 // ============================================
+// generated_contents テーブル
+// ============================================
+
+// AI生成コンテンツを保存する（SNS投稿案・口コミ返信案等）
+// statusはdraftで作成し、オーナーがOKしたらapprovedに更新する（Phase 2）
+export async function saveGeneratedContent(params: {
+  storeId: string;
+  contentType: "sns_post" | "review_reply" | "job_post" | "report";
+  inputText: string;
+  generatedText: string;
+  platform?: string;
+}): Promise<void> {
+  const { error } = await supabase.from("generated_contents").insert({
+    store_id: params.storeId,
+    content_type: params.contentType,
+    input_text: params.inputText,
+    generated_text: params.generatedText,
+    status: "draft",
+    platform: params.platform ?? null,
+  });
+
+  if (error) {
+    // 保存失敗はログに残すが、返信処理は止めない
+    console.error("saveGeneratedContent error:", error);
+  }
+}
+
+// ============================================
 // messages テーブル
 // ============================================
 

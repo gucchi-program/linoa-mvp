@@ -112,14 +112,14 @@ async function handleMessage(event: LineWebhookEvent): Promise<void> {
     intent,
   });
 
-  // intent → ハンドラーへ振り分けて返信テキストを生成
-  let replyText: string;
+  // intent → ハンドラーへ振り分けてLINEメッセージ配列を生成
+  let replyMessages: import("@/types").LineMessage[];
   const start = Date.now();
   try {
-    replyText = await routeToHandler(intent, store, userText);
+    replyMessages = await routeToHandler(intent, store, userText);
   } catch (error) {
     console.error("routeToHandler error:", error);
-    replyText = "少し混み合っています。1分後にもう一度お試しください。";
+    replyMessages = [{ type: "text", text: "少し混み合っています。1分後にもう一度お試しください。" }];
   }
   const elapsed = Date.now() - start;
   // 7秒超えたら警告（Vercel無料プランの10秒制限の手前で気づけるように）
@@ -127,11 +127,12 @@ async function handleMessage(event: LineWebhookEvent): Promise<void> {
     console.warn(`[処理時間警告] ${elapsed}ms / intent: ${intent} / store: ${store.id}`);
   }
 
-  await defaultLineClient.replyMessage(event.replyToken, [
-    { type: "text", text: replyText },
-  ]);
+  await defaultLineClient.replyMessage(event.replyToken, replyMessages);
 
-  // 送信メッセージを保存
+  // 送信メッセージをDBに保存（Flex Messageはaltテキストで保存）
+  const replyText = replyMessages
+    .map((m) => (m.type === "text" ? m.text : m.type === "flex" ? m.altText : ""))
+    .join(" ");
   await saveMessage({
     storeId: store.id,
     lineUserId,

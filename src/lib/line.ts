@@ -4,10 +4,12 @@ const CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET!;
 const CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN!;
 const LINE_API_BASE = "https://api.line.me/v2/bot";
 
-// LINEメッセージ型（テキスト・画像に対応）
+// LINEメッセージ型（テキスト・画像・Flexに対応）
+// Flex Message: カード型レイアウト。SNS投稿案や売上レポートの表示に使う
 export type LineMessage =
   | { type: "text"; text: string }
-  | { type: "image"; originalContentUrl: string; previewImageUrl: string };
+  | { type: "image"; originalContentUrl: string; previewImageUrl: string }
+  | { type: "flex"; altText: string; contents: object };
 
 // ============================================
 // LineClient: テナントごとの認証情報にバインドされたクライアント

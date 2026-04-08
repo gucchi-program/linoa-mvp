@@ -98,6 +98,12 @@ export type MessageIntent =
   | 'question'
   | 'casual';
 
+// LINE メッセージ型（line.tsと同じ定義をtypesからも使えるようにre-export）
+export type LineMessage =
+  | { type: "text"; text: string }
+  | { type: "image"; originalContentUrl: string; previewImageUrl: string }
+  | { type: "flex"; altText: string; contents: object };
+
 // LINE Webhook イベント型（必要最小限）
 export interface LineWebhookEvent {
   type: string;
