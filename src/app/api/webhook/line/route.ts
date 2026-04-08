@@ -1,39 +1,35 @@
 // ============================================
-// LINE Webhook エンドポイント（新設計版）
+// LINE Webhook エンドポイント
 // 設計書: docs/mvp-design.md
 //
-// Step 1: 署名検証 → messagesに保存 → オウム返し
-// Step 2以降: 意図分類 → ハンドラーに振り分け
+// 処理フロー:
+// 1. 署名検証
+// 2. メッセージをDBに保存（intent付き）
+// 3. 意図に応じたハンドラーへ振り分け
+// 4. 返信をDBに保存
 // ============================================
 
 import { NextRequest, NextResponse } from "next/server";
 import { defaultLineClient } from "@/lib/line";
-import {
-  getStoreByLineUserId,
-  createStore,
-  saveMessage,
-} from "@/lib/db";
+import { getStoreByLineUserId, createStore, saveMessage } from "@/lib/db";
+import { classifyIntent } from "@/lib/ai/intent-classifier";
+import { routeToHandler } from "@/lib/handlers";
 import type { LineWebhookBody, LineWebhookEvent } from "@/types";
 
 export async function POST(request: NextRequest) {
   const body = await request.text();
   const signature = request.headers.get("x-line-signature");
 
-  // 署名がない場合は即拒否
   if (!signature) {
     return NextResponse.json({ error: "Missing signature" }, { status: 400 });
   }
 
-  // LINE Channel Secretで署名を検証
   if (!defaultLineClient.verifySignature(body, signature)) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 403 });
   }
 
   const webhookBody: LineWebhookBody = JSON.parse(body);
 
-  // イベントを順番に処理する
-  // 注意: Claude API呼び出し（Step 2以降）は時間がかかるため、
-  // そのタイミングで非同期化を検討する
   for (const event of webhookBody.events) {
     await handleEvent(event);
   }
@@ -56,18 +52,14 @@ async function handleEvent(event: LineWebhookEvent): Promise<void> {
 
 // ============================================
 // 友だち追加イベント
-// storesレコードを作成してウェルカムメッセージを送る
 // ============================================
 async function handleFollow(event: LineWebhookEvent): Promise<void> {
   const lineUserId = event.source.userId;
 
-  // 既存レコードを確認（ブロック解除からの再follow対応）
   let store = await getStoreByLineUserId(lineUserId);
-
   if (!store) {
     store = await createStore(lineUserId);
   }
-
   if (!store) {
     console.error("handleFollow: store作成に失敗", lineUserId);
     return;
@@ -82,7 +74,6 @@ async function handleFollow(event: LineWebhookEvent): Promise<void> {
     { type: "text", text: welcomeText },
   ]);
 
-  // 送信したウェルカムメッセージをログに保存
   await saveMessage({
     storeId: store.id,
     lineUserId,
@@ -93,8 +84,7 @@ async function handleFollow(event: LineWebhookEvent): Promise<void> {
 
 // ============================================
 // テキストメッセージイベント
-// Step 1: messagesに保存してそのまま返す（オウム返し）
-// Step 2以降: 意図分類 → ハンドラーへ振り分け
+// 意図分類 → ハンドラー振り分け → 返信
 // ============================================
 async function handleMessage(event: LineWebhookEvent): Promise<void> {
   if (event.message?.type !== "text" || !event.message.text) return;
@@ -102,7 +92,6 @@ async function handleMessage(event: LineWebhookEvent): Promise<void> {
   const lineUserId = event.source.userId;
   const userText = event.message.text;
 
-  // 店舗レコードを取得
   const store = await getStoreByLineUserId(lineUserId);
   if (!store) {
     await defaultLineClient.replyMessage(event.replyToken, [
@@ -111,25 +100,37 @@ async function handleMessage(event: LineWebhookEvent): Promise<void> {
     return;
   }
 
-  // 受信メッセージをDBに保存
+  // 意図分類（Claude API: max_tokens 20）
+  const intent = await classifyIntent(userText);
+
+  // 受信メッセージをintent付きで保存
   await saveMessage({
     storeId: store.id,
     lineUserId,
     direction: "incoming",
     content: userText,
+    intent,
   });
 
-  // オウム返し
-  const replyText = `受信：${userText}`;
+  // intent → ハンドラーへ振り分けて返信テキストを生成
+  let replyText: string;
+  try {
+    replyText = await routeToHandler(intent, store, userText);
+  } catch (error) {
+    console.error("routeToHandler error:", error);
+    replyText = "少し混み合っています。1分後にもう一度お試しください。";
+  }
+
   await defaultLineClient.replyMessage(event.replyToken, [
     { type: "text", text: replyText },
   ]);
 
-  // 送信メッセージをDBに保存
+  // 送信メッセージを保存
   await saveMessage({
     storeId: store.id,
     lineUserId,
     direction: "outgoing",
     content: replyText,
+    intent,
   });
 }
