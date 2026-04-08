@@ -1,172 +1,102 @@
 // ============================================
-// Linoa MVP 型定義
+// Linoa MVP 型定義（新設計版 2026-04-08〜）
 // ============================================
-
-// オーナーマスタ（Sprint 4で分離、Sprint 9でマルチテナント対応）
-export interface Owner {
-  id: string;
-  line_user_id: string;
-  owner_name: string | null;
-  // Sprint 9追加: テナント識別・LINEチャネル認証情報
-  subdomain: string | null;               // "clientA" → clientA.li-noa.jp
-  line_channel_secret: string | null;     // テナント固有チャネルシークレット
-  line_channel_access_token: string | null; // テナント固有アクセストークン
-  is_active: boolean;                     // テナントが有効か
-  created_at: string;
-  updated_at: string;
-}
 
 // 店舗マスタ
 export interface Store {
   id: string;
-  owner_id: string;
-  line_user_id: string; // 後方互換のため残す（移行期間）
+  line_user_id: string;
   store_name: string | null;
   owner_name: string | null;
-  genre: string | null;
+  store_type: string | null;    // 'izakaya', 'italian', 'ramen', etc.
+  area: string | null;
   seat_count: number | null;
-  opening_hours: string | null;
+  price_range: string | null;   // '3000-5000', '5000-8000', etc.
+  years_in_business: number | null;
+  specialty: string | null;
+  customer_profile: string | null;
+  owner_tone: string | null;
+  profile_prompt: string | null; // Claude用の店舗プロファイル全文
   onboarding_completed: boolean;
-  onboarding_step: OnboardingStep;
   created_at: string;
   updated_at: string;
 }
 
-// ダッシュボード認証トークン
-export interface DashboardToken {
+// LINEメッセージ全件ログ
+export interface Message {
   id: string;
-  owner_id: string;
-  token: string;
-  expires_at: string;
+  store_id: string;
+  line_user_id: string;
+  direction: 'incoming' | 'outgoing';
+  content: string;
+  message_type: string;
+  intent: string | null;
+  metadata: Record<string, unknown>;
   created_at: string;
 }
 
-// 日報データ
-export interface DailyReport {
+// 売上記録
+export interface DailySale {
   id: string;
   store_id: string;
-  report_date: string; // YYYY-MM-DD
+  date: string; // YYYY-MM-DD
   revenue: number | null;
   customer_count: number | null;
-  reservation_count: number | null;
-  weather: string | null;
+  average_spend: number | null;
   memo: string | null;
+  source: 'manual_line' | 'pos_smaregi' | 'pos_airregi';
   created_at: string;
 }
 
-// 非構造データ抽出
-export interface ExtractedContext {
+// 顧客メモ
+export interface CustomerNote {
   id: string;
   store_id: string;
-  context_type: string; // 'customer_info' | 'menu_change' | 'event' 等
-  content: string;
-  source_message: string | null;
-  created_at: string;
-}
-
-// 会話履歴
-export interface Conversation {
-  id: string;
-  store_id: string;
-  role: "user" | "assistant";
-  content: string;
-  created_at: string;
-}
-
-// オンボーディングのステップ定義
-// store_name → owner_name → genre → seat_count → opening_hours → completed の順で進行
-export type OnboardingStep =
-  | "store_name"
-  | "owner_name"
-  | "genre"
-  | "seat_count"
-  | "opening_hours"
-  | "completed";
-
-// 日報セッションのステップ定義
-export type ReportStep =
-  | "customer_count"
-  | "revenue"
-  | "reservation_count"
-  | "memo"
-  | "completed";
-
-// 日報入力セッション
-// Webhookはステートレスなため、入力途中の値をDBで保持する
-export interface ReportSession {
-  id: string;
-  store_id: string;
-  status: "active" | "completed" | "cancelled";
-  current_step: ReportStep;
-  customer_count: number | null;
-  revenue: number | null;
-  reservation_count: number | null;
-  memo: string | null;
+  customer_name: string;
+  notes: Record<string, string>;
+  last_visit: string | null; // YYYY-MM-DD
+  visit_count: number;
+  birthday: string | null;   // 'MM-DD' 形式
   created_at: string;
   updated_at: string;
 }
 
-// 賞味期限アイテム
-export interface ExpiryItem {
+// 在庫・仕入れメモ
+export interface InventoryLog {
   id: string;
   store_id: string;
   item_name: string;
-  expiry_date: string; // YYYY-MM-DD
-  quantity: string | null;
-  notified: boolean;
-  used: boolean;
+  quantity: number | null;
+  unit: string | null;
+  action: 'received' | 'used' | 'note' | 'waste' | null;
+  memo: string | null;
   created_at: string;
-  updated_at: string;
 }
 
-// 賞味期限入力セッションのステップ
-export type ExpiryStep = "item_name" | "expiry_date" | "quantity" | "completed";
-
-// 賞味期限入力の一時データ（report_sessionsとは別にメモリで管理）
-export interface ExpiryInputState {
-  step: ExpiryStep;
-  item_name?: string;
-  expiry_date?: string;
-  quantity?: string;
-}
-
-// スタッフ
-export interface Staff {
+// AI生成コンテンツ（SNS投稿案・口コミ返信案等）
+export interface GeneratedContent {
   id: string;
   store_id: string;
-  name: string;
-  role: "full_time" | "part_time";
-  active: boolean;
+  content_type: 'sns_post' | 'review_reply' | 'job_post' | 'report';
+  input_text: string | null;
+  generated_text: string;
+  status: 'draft' | 'approved' | 'posted' | 'rejected';
+  platform: string | null;
+  posted_at: string | null;
   created_at: string;
 }
 
-// シフト
-export interface Shift {
-  id: string;
-  store_id: string;
-  staff_id: string;
-  shift_date: string; // YYYY-MM-DD
-  start_time: string; // "17:00"
-  end_time: string;   // "23:00"
-  note: string | null;
-  created_at: string;
-}
-
-// Claude APIによる所感分析結果
-export interface MemoAnalysis {
-  feedback: string; // AIフィードバックメッセージ
-  extracted_contexts: {
-    context_type: string;
-    content: string;
-  }[];
-}
-
-// Claude APIレスポンスの構造化出力
-export interface ClaudeResponse {
-  reply: string; // LINEに返すメッセージ
-  daily_report: Partial<DailyReport> | null;
-  extracted_contexts: Pick<ExtractedContext, "context_type" | "content">[];
-}
+// 意図分類の9カテゴリ（Step 2で使用）
+export type MessageIntent =
+  | 'sns_post_request'
+  | 'sales_input'
+  | 'customer_note'
+  | 'customer_query'
+  | 'inventory'
+  | 'review_reply_request'
+  | 'report_request'
+  | 'question'
+  | 'casual';
 
 // LINE Webhook イベント型（必要最小限）
 export interface LineWebhookEvent {

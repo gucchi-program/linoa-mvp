@@ -1,10 +1,17 @@
+// ============================================
+// DB操作モジュール（新設計版 2026-04-08〜）
+// 各テーブルの操作関数をここに集約する
+// Step 2以降でハンドラー専用のDB関数も追加していく
+// ============================================
+
 import { supabase } from "./supabase";
-import type { Store, ReportSession, Owner, DashboardToken, ExpiryItem, Staff, Shift } from "@/types";
-import crypto from "crypto";
+import type { Store } from "@/types";
 
 // ============================================
-// store取得（LINE user IDから）
+// stores テーブル
 // ============================================
+
+// line_user_idで店舗を1件取得する
 export async function getStoreByLineUserId(
   lineUserId: string
 ): Promise<Store | null> {
@@ -12,25 +19,48 @@ export async function getStoreByLineUserId(
     .from("stores")
     .select("*")
     .eq("line_user_id", lineUserId)
-    .single();
+    .maybeSingle();
 
   if (error) {
-    // PGRST116: 0行の場合（未登録ユーザー）
-    if (error.code === "PGRST116") return null;
     console.error("getStoreByLineUserId error:", error);
-    throw error;
+    return null;
   }
   return data;
 }
 
-// ============================================
-// store更新（オンボーディング等で使用）
-// Partial<Store>のうち更新可能なカラムを指定して更新する
-// ============================================
+// LINE友だち追加時に店舗レコードを作成する
+export async function createStore(lineUserId: string): Promise<Store | null> {
+  const { data, error } = await supabase
+    .from("stores")
+    .insert({ line_user_id: lineUserId })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("createStore error:", error);
+    return null;
+  }
+  return data;
+}
+
+// 店舗情報を更新する（オンボーディング等で使用）
 export async function updateStore(
   storeId: string,
-  updates: Partial<Pick<Store, "store_name" | "owner_name" | "genre" | "seat_count" | "opening_hours" | "onboarding_step" | "onboarding_completed">>
-): Promise<Store> {
+  updates: Partial<Pick<Store,
+    | "store_name"
+    | "owner_name"
+    | "store_type"
+    | "area"
+    | "seat_count"
+    | "price_range"
+    | "years_in_business"
+    | "specialty"
+    | "customer_profile"
+    | "owner_tone"
+    | "profile_prompt"
+    | "onboarding_completed"
+  >>
+): Promise<Store | null> {
   const { data, error } = await supabase
     .from("stores")
     .update(updates)
@@ -40,624 +70,35 @@ export async function updateStore(
 
   if (error) {
     console.error("updateStore error:", error);
-    throw error;
+    return null;
   }
   return data;
 }
 
 // ============================================
-// 日報セッション取得（アクティブなもの）
-// partial unique indexで1店舗1セッションを保証
+// messages テーブル
 // ============================================
-export async function getActiveSession(
-  storeId: string
-): Promise<ReportSession | null> {
-  const { data, error } = await supabase
-    .from("report_sessions")
-    .select("*")
-    .eq("store_id", storeId)
-    .eq("status", "active")
-    .single();
 
-  if (error) {
-    if (error.code === "PGRST116") return null;
-    console.error("getActiveSession error:", error);
-    throw error;
-  }
-  return data;
-}
-
-// ============================================
-// 日報セッション作成
-// ============================================
-export async function createSession(
-  storeId: string
-): Promise<ReportSession> {
-  const { data, error } = await supabase
-    .from("report_sessions")
-    .insert({ store_id: storeId })
-    .select()
-    .single();
-
-  if (error) {
-    console.error("createSession error:", error);
-    throw error;
-  }
-  return data;
-}
-
-// ============================================
-// 日報セッション更新
-// ============================================
-export async function updateSession(
-  sessionId: string,
-  updates: Partial<Pick<ReportSession, "current_step" | "status" | "customer_count" | "revenue" | "reservation_count" | "memo">>
-): Promise<ReportSession> {
-  const { data, error } = await supabase
-    .from("report_sessions")
-    .update(updates)
-    .eq("id", sessionId)
-    .select()
-    .single();
-
-  if (error) {
-    console.error("updateSession error:", error);
-    throw error;
-  }
-  return data;
-}
-
-// ============================================
-// 古いアクティブセッションをキャンセル
-// 24時間超過したセッションを自動キャンセルする
-// ============================================
-export async function cancelStaleSession(storeId: string): Promise<void> {
-  const staleThreshold = new Date(
-    Date.now() - 24 * 60 * 60 * 1000
-  ).toISOString();
-
-  await supabase
-    .from("report_sessions")
-    .update({ status: "cancelled" })
-    .eq("store_id", storeId)
-    .eq("status", "active")
-    .lt("updated_at", staleThreshold);
-}
-
-// ============================================
-// 日報upsert（同日2回目は上書き）
-// store_id + report_dateのunique indexを利用
-// ============================================
-export async function upsertDailyReport(params: {
+// メッセージを保存する（送受信両方に使う）
+export async function saveMessage(params: {
   storeId: string;
-  reportDate: string;
-  customerCount: number;
-  revenue: number;
-  reservationCount: number;
-  memo: string;
-  weather?: string | null;
-}): Promise<string> {
-  const { data, error } = await supabase
-    .from("daily_reports")
-    .upsert(
-      {
-        store_id: params.storeId,
-        report_date: params.reportDate,
-        customer_count: params.customerCount,
-        revenue: params.revenue,
-        reservation_count: params.reservationCount,
-        memo: params.memo,
-        ...(params.weather ? { weather: params.weather } : {}),
-      },
-      { onConflict: "store_id,report_date" }
-    )
-    .select("id")
-    .single();
-
-  if (error) {
-    console.error("upsertDailyReport error:", error);
-    throw error;
-  }
-  return data.id;
-}
-
-// ============================================
-// extracted_contexts一括保存
-// ============================================
-export async function saveExtractedContexts(
-  storeId: string,
-  contexts: { context_type: string; content: string }[],
-  sourceMessage: string
-): Promise<void> {
-  if (contexts.length === 0) return;
-
-  const rows = contexts.map((ctx) => ({
-    store_id: storeId,
-    context_type: ctx.context_type,
-    content: ctx.content,
-    source_message: sourceMessage,
-  }));
-
-  const { error } = await supabase
-    .from("extracted_contexts")
-    .insert(rows);
-
-  if (error) {
-    console.error("saveExtractedContexts error:", error);
-    throw error;
-  }
-}
-
-// ============================================
-// 会話履歴保存
-// ============================================
-export async function saveConversation(
-  storeId: string,
-  role: "user" | "assistant",
-  content: string
-): Promise<void> {
-  const { error } = await supabase.from("conversations").insert({
-    store_id: storeId,
-    role,
-    content,
+  lineUserId: string;
+  direction: "incoming" | "outgoing";
+  content: string;
+  messageType?: string;
+  intent?: string;
+}): Promise<void> {
+  const { error } = await supabase.from("messages").insert({
+    store_id: params.storeId,
+    line_user_id: params.lineUserId,
+    direction: params.direction,
+    content: params.content,
+    message_type: params.messageType ?? "text",
+    intent: params.intent ?? null,
   });
 
   if (error) {
-    console.error("saveConversation error:", error);
-    throw error;
+    // 保存失敗はログに残すが、メッセージ処理自体は止めない
+    console.error("saveMessage error:", error);
   }
-}
-
-// ============================================
-// オーナー取得（IDから）
-// マルチテナントWebhookで使用
-// ============================================
-export async function getOwnerById(
-  ownerId: string
-): Promise<Owner | null> {
-  const { data, error } = await supabase
-    .from("owners")
-    .select("*")
-    .eq("id", ownerId)
-    .single();
-
-  if (error) {
-    if (error.code === "PGRST116") return null;
-    console.error("getOwnerById error:", error);
-    throw error;
-  }
-  return data;
-}
-
-// ============================================
-// オーナー取得（サブドメインから）
-// middleware.tsでサブドメイン→owner_id解決に使用
-// ============================================
-export async function getOwnerBySubdomain(
-  subdomain: string
-): Promise<Owner | null> {
-  const { data, error } = await supabase
-    .from("owners")
-    .select("*")
-    .eq("subdomain", subdomain)
-    .eq("is_active", true)
-    .single();
-
-  if (error) {
-    if (error.code === "PGRST116") return null;
-    console.error("getOwnerBySubdomain error:", error);
-    return null;
-  }
-  return data;
-}
-
-// ============================================
-// オーナー取得（LINE user IDから）
-// ============================================
-export async function getOwnerByLineUserId(
-  lineUserId: string
-): Promise<Owner | null> {
-  const { data, error } = await supabase
-    .from("owners")
-    .select("*")
-    .eq("line_user_id", lineUserId)
-    .single();
-
-  if (error) {
-    if (error.code === "PGRST116") return null;
-    console.error("getOwnerByLineUserId error:", error);
-    throw error;
-  }
-  return data;
-}
-
-// ============================================
-// オーナーの全店舗取得
-// ============================================
-export async function getStoresByOwnerId(
-  ownerId: string
-): Promise<Store[]> {
-  const { data, error } = await supabase
-    .from("stores")
-    .select("*")
-    .eq("owner_id", ownerId)
-    .order("created_at", { ascending: true });
-
-  if (error) {
-    console.error("getStoresByOwnerId error:", error);
-    throw error;
-  }
-  return data ?? [];
-}
-
-// ============================================
-// 店舗の日報一覧取得（ダッシュボード用）
-// ============================================
-export async function getDailyReports(
-  storeId: string,
-  limit: number = 90
-): Promise<{
-  report_date: string;
-  revenue: number | null;
-  customer_count: number | null;
-  reservation_count: number | null;
-  weather: string | null;
-  memo: string | null;
-}[]> {
-  const { data, error } = await supabase
-    .from("daily_reports")
-    .select("report_date, revenue, customer_count, reservation_count, weather, memo")
-    .eq("store_id", storeId)
-    .order("report_date", { ascending: true })
-    .limit(limit);
-
-  if (error) {
-    console.error("getDailyReports error:", error);
-    throw error;
-  }
-  return data ?? [];
-}
-
-// ============================================
-// 会話履歴取得（直近N件）
-// 自然言語対話のコンテキスト構築に使用
-// ============================================
-export async function getRecentConversations(
-  storeId: string,
-  limit: number = 10
-): Promise<{ role: "user" | "assistant"; content: string; created_at: string }[]> {
-  const { data, error } = await supabase
-    .from("conversations")
-    .select("role, content, created_at")
-    .eq("store_id", storeId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
-  if (error) {
-    console.error("getRecentConversations error:", error);
-    return [];
-  }
-  return (data ?? []).reverse();
-}
-
-// ============================================
-// 抽出コンテキスト取得（直近N件）
-// AI秘書の文脈理解に使用
-// ============================================
-export async function getRecentContexts(
-  storeId: string,
-  limit: number = 20
-): Promise<{ context_type: string; content: string; created_at: string }[]> {
-  const { data, error } = await supabase
-    .from("extracted_contexts")
-    .select("context_type, content, created_at")
-    .eq("store_id", storeId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
-  if (error) {
-    console.error("getRecentContexts error:", error);
-    return [];
-  }
-  return (data ?? []).reverse();
-}
-
-// ============================================
-// ダッシュボード認証トークン生成
-// 24時間有効のワンタイムトークン
-// ============================================
-export async function createDashboardToken(
-  ownerId: string
-): Promise<string> {
-  const token = crypto.randomBytes(32).toString("hex");
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-
-  const { error } = await supabase
-    .from("dashboard_tokens")
-    .insert({ owner_id: ownerId, token, expires_at: expiresAt });
-
-  if (error) {
-    console.error("createDashboardToken error:", error);
-    throw error;
-  }
-  return token;
-}
-
-// ============================================
-// ダッシュボードトークン検証
-// 有効なトークンならowner_idを返す
-// ============================================
-export async function verifyDashboardToken(
-  token: string
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("dashboard_tokens")
-    .select("owner_id, expires_at")
-    .eq("token", token)
-    .single();
-
-  if (error) {
-    if (error.code === "PGRST116") return null;
-    console.error("verifyDashboardToken error:", error);
-    return null;
-  }
-
-  // 有効期限チェック
-  if (new Date(data.expires_at) < new Date()) {
-    return null;
-  }
-
-  return data.owner_id;
-}
-
-// ============================================
-// 賞味期限アイテム登録
-// ============================================
-export async function createExpiryItem(params: {
-  storeId: string;
-  itemName: string;
-  expiryDate: string;
-  quantity?: string;
-}): Promise<ExpiryItem> {
-  const { data, error } = await supabase
-    .from("expiry_items")
-    .insert({
-      store_id: params.storeId,
-      item_name: params.itemName,
-      expiry_date: params.expiryDate,
-      quantity: params.quantity ?? null,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    console.error("createExpiryItem error:", error);
-    throw error;
-  }
-  return data;
-}
-
-// ============================================
-// 賞味期限アラート対象の取得
-// 期限がN日以内かつ未通知・未使用のアイテム
-// store情報も含めて返す（プッシュ通知に必要）
-// ============================================
-export async function getExpiringItems(
-  daysAhead: number = 2
-): Promise<(ExpiryItem & { stores: { line_user_id: string; store_name: string | null } })[]> {
-  const targetDate = new Date();
-  targetDate.setDate(targetDate.getDate() + daysAhead);
-  const dateStr = targetDate.toISOString().split("T")[0];
-
-  const { data, error } = await supabase
-    .from("expiry_items")
-    .select("*, stores(line_user_id, store_name)")
-    .eq("used", false)
-    .eq("notified", false)
-    .lte("expiry_date", dateStr)
-    .order("expiry_date", { ascending: true });
-
-  if (error) {
-    console.error("getExpiringItems error:", error);
-    return [];
-  }
-  return data ?? [];
-}
-
-// ============================================
-// 賞味期限アイテムの通知済み更新
-// ============================================
-export async function markExpiryNotified(itemIds: string[]): Promise<void> {
-  if (itemIds.length === 0) return;
-  const { error } = await supabase
-    .from("expiry_items")
-    .update({ notified: true })
-    .in("id", itemIds);
-
-  if (error) {
-    console.error("markExpiryNotified error:", error);
-  }
-}
-
-// ============================================
-// 店舗の有効な賞味期限アイテム一覧
-// ============================================
-export async function getActiveExpiryItems(
-  storeId: string
-): Promise<ExpiryItem[]> {
-  const { data, error } = await supabase
-    .from("expiry_items")
-    .select("*")
-    .eq("store_id", storeId)
-    .eq("used", false)
-    .order("expiry_date", { ascending: true });
-
-  if (error) {
-    console.error("getActiveExpiryItems error:", error);
-    return [];
-  }
-  return data ?? [];
-}
-
-// ============================================
-// 賞味期限アイテムを使い切り済みにする
-// ============================================
-export async function markExpiryUsed(itemId: string): Promise<void> {
-  const { error } = await supabase
-    .from("expiry_items")
-    .update({ used: true })
-    .eq("id", itemId);
-
-  if (error) {
-    console.error("markExpiryUsed error:", error);
-  }
-}
-
-// ============================================
-// スタッフ登録
-// ============================================
-export async function createStaff(
-  storeId: string,
-  name: string,
-  role: "full_time" | "part_time" = "part_time"
-): Promise<Staff> {
-  const { data, error } = await supabase
-    .from("staff")
-    .insert({ store_id: storeId, name, role })
-    .select()
-    .single();
-
-  if (error) {
-    console.error("createStaff error:", error);
-    throw error;
-  }
-  return data;
-}
-
-// ============================================
-// 店舗の在籍スタッフ一覧
-// ============================================
-export async function getActiveStaff(storeId: string): Promise<Staff[]> {
-  const { data, error } = await supabase
-    .from("staff")
-    .select("*")
-    .eq("store_id", storeId)
-    .eq("active", true)
-    .order("created_at", { ascending: true });
-
-  if (error) {
-    console.error("getActiveStaff error:", error);
-    return [];
-  }
-  return data ?? [];
-}
-
-// ============================================
-// シフト登録
-// ============================================
-export async function createShift(params: {
-  storeId: string;
-  staffId: string;
-  shiftDate: string;
-  startTime: string;
-  endTime: string;
-  note?: string;
-}): Promise<Shift> {
-  const { data, error } = await supabase
-    .from("shifts")
-    .upsert(
-      {
-        store_id: params.storeId,
-        staff_id: params.staffId,
-        shift_date: params.shiftDate,
-        start_time: params.startTime,
-        end_time: params.endTime,
-        note: params.note ?? null,
-      },
-      { onConflict: "staff_id,shift_date" }
-    )
-    .select()
-    .single();
-
-  if (error) {
-    console.error("createShift error:", error);
-    throw error;
-  }
-  return data;
-}
-
-// ============================================
-// 指定期間のシフト一覧取得（スタッフ名付き）
-// ============================================
-export async function getShifts(
-  storeId: string,
-  startDate: string,
-  endDate: string
-): Promise<(Shift & { staff: { name: string } })[]> {
-  const { data, error } = await supabase
-    .from("shifts")
-    .select("*, staff(name)")
-    .eq("store_id", storeId)
-    .gte("shift_date", startDate)
-    .lte("shift_date", endDate)
-    .order("shift_date", { ascending: true })
-    .order("start_time", { ascending: true });
-
-  if (error) {
-    console.error("getShifts error:", error);
-    return [];
-  }
-  return data ?? [];
-}
-
-// ============================================
-// 全店舗の日報を取得（本部ダッシュボード用）
-// 複数のstoreIdに対して直近N日分を一括取得する
-// ============================================
-export async function getDailyReportsForStores(
-  storeIds: string[],
-  days: number = 30
-): Promise<{ store_id: string; report_date: string; revenue: number | null; customer_count: number | null; weather: string | null; memo: string | null }[]> {
-  if (storeIds.length === 0) return [];
-
-  const fromDate = new Date();
-  fromDate.setDate(fromDate.getDate() - days);
-  const fromDateStr = fromDate.toISOString().split("T")[0];
-
-  const { data, error } = await supabase
-    .from("daily_reports")
-    .select("store_id, report_date, revenue, customer_count, weather, memo")
-    .in("store_id", storeIds)
-    .gte("report_date", fromDateStr)
-    .order("report_date", { ascending: true });
-
-  if (error) {
-    console.error("getDailyReportsForStores error:", error);
-    return [];
-  }
-  return data ?? [];
-}
-
-// ============================================
-// スタッフを名前で検索（部分一致）
-// ============================================
-export async function findStaffByName(
-  storeId: string,
-  name: string
-): Promise<Staff | null> {
-  const { data, error } = await supabase
-    .from("staff")
-    .select("*")
-    .eq("store_id", storeId)
-    .eq("active", true)
-    .ilike("name", `%${name}%`)
-    .limit(1)
-    .single();
-
-  if (error) {
-    if (error.code === "PGRST116") return null;
-    console.error("findStaffByName error:", error);
-    return null;
-  }
-  return data;
 }
