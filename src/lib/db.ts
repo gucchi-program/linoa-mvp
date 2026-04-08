@@ -148,6 +148,116 @@ export async function updateStore(
 }
 
 // ============================================
+// customer_notes テーブル
+// ============================================
+
+// 顧客メモをUPSERT（同名の顧客は既存notesにマージ）
+export async function upsertCustomerNote(params: {
+  storeId: string;
+  customerName: string;
+  notesUpdate: Record<string, string>;
+  lastVisit?: string;
+}): Promise<void> {
+  // 既存レコードを取得してnotesをマージする
+  const { data: existing } = await supabase
+    .from("customer_notes")
+    .select("notes")
+    .eq("store_id", params.storeId)
+    .eq("customer_name", params.customerName)
+    .maybeSingle();
+
+  const mergedNotes = { ...(existing?.notes ?? {}), ...params.notesUpdate };
+
+  const { error } = await supabase.from("customer_notes").upsert(
+    {
+      store_id: params.storeId,
+      customer_name: params.customerName,
+      notes: mergedNotes,
+      ...(params.lastVisit ? { last_visit: params.lastVisit } : {}),
+    },
+    { onConflict: "store_id,customer_name" }
+  );
+
+  if (error) {
+    console.error("upsertCustomerNote error:", error);
+    throw error;
+  }
+}
+
+// 顧客名で部分一致検索（「田中」で「田中さん」「田中太郎」等を検索）
+export async function findCustomerNotes(
+  storeId: string,
+  name: string
+): Promise<import("@/types").CustomerNote[]> {
+  const { data, error } = await supabase
+    .from("customer_notes")
+    .select("*")
+    .eq("store_id", storeId)
+    .ilike("customer_name", `%${name}%`)
+    .order("updated_at", { ascending: false })
+    .limit(3);
+
+  if (error) {
+    console.error("findCustomerNotes error:", error);
+    return [];
+  }
+  return data ?? [];
+}
+
+// ============================================
+// inventory_logs テーブル
+// ============================================
+
+// 在庫・仕入れログを追記（更新ではなく追記型）
+export async function saveInventoryLog(params: {
+  storeId: string;
+  itemName: string;
+  quantity: number | null;
+  unit: string | null;
+  action: "received" | "used" | "note" | "waste" | null;
+  memo: string | null;
+}): Promise<void> {
+  const { error } = await supabase.from("inventory_logs").insert({
+    store_id: params.storeId,
+    item_name: params.itemName,
+    quantity: params.quantity,
+    unit: params.unit,
+    action: params.action,
+    memo: params.memo,
+  });
+
+  if (error) {
+    console.error("saveInventoryLog error:", error);
+    throw error;
+  }
+}
+
+// ============================================
+// daily_sales レポート用取得
+// ============================================
+
+// 指定期間の売上データを取得（レポートハンドラーで使用）
+export async function getDailySalesRange(
+  storeId: string,
+  from: string,
+  to: string
+): Promise<{ date: string; revenue: number | null; customer_count: number | null }[]> {
+  const { data, error } = await supabase
+    .from("daily_sales")
+    .select("date, revenue, customer_count")
+    .eq("store_id", storeId)
+    .gte("date", from)
+    .lte("date", to)
+    .order("date", { ascending: true });
+
+  if (error) {
+    console.error("getDailySalesRange error:", error);
+    return [];
+  }
+  return data ?? [];
+}
+
+// ============================================
 // generated_contents テーブル
 // ============================================
 
