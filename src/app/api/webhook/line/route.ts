@@ -114,11 +114,17 @@ async function handleMessage(event: LineWebhookEvent): Promise<void> {
 
   // intent → ハンドラーへ振り分けて返信テキストを生成
   let replyText: string;
+  const start = Date.now();
   try {
     replyText = await routeToHandler(intent, store, userText);
   } catch (error) {
     console.error("routeToHandler error:", error);
     replyText = "少し混み合っています。1分後にもう一度お試しください。";
+  }
+  const elapsed = Date.now() - start;
+  // 7秒超えたら警告（Vercel無料プランの10秒制限の手前で気づけるように）
+  if (elapsed > 7000) {
+    console.warn(`[処理時間警告] ${elapsed}ms / intent: ${intent} / store: ${store.id}`);
   }
 
   await defaultLineClient.replyMessage(event.replyToken, [
