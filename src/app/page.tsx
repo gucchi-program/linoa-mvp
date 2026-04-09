@@ -1,18 +1,10 @@
 // ============================================
 // Linoa LP（ランディングページ）
-// 新コンセプト: 飲食店オーナーの右腕になるLINE AI
+// 資料請求フォーム導線に変更済み
 // ============================================
 
-const LINE_ADD_FRIEND_URL = "https://line.me/R/ti/p/@linoa"; // 実際のLINE公式アカウントURLに変更
-
-// LINE公式アイコンSVG
-function LineIcon({ size = 24 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63h2.386c.349 0 .63.285.63.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63.349 0 .631.285.631.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.281.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314" />
-    </svg>
-  );
-}
+import Image from "next/image";
+import ContactForm from "@/components/ContactForm";
 
 // チェックマークSVG
 function CheckIcon() {
@@ -67,11 +59,10 @@ function SceneCard({
 }) {
   return (
     <div className="bg-white rounded-2xl overflow-hidden shadow-md border border-gray-100">
-      {/* カードヘッダー */}
       <div className="px-5 py-4 border-b border-gray-100" style={{ backgroundColor: "#F0FFF0" }}>
         <div className="flex items-center gap-3">
           <span
-            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold"
+            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
             style={{ backgroundColor: "#00B900" }}
           >
             {number}
@@ -82,7 +73,6 @@ function SceneCard({
           </div>
         </div>
       </div>
-      {/* チャット部分 */}
       <div className="px-4 py-4" style={{ backgroundColor: "#ECE5DD" }}>
         {children}
       </div>
@@ -106,25 +96,36 @@ export default function Home() {
             </span>
           </span>
           <a
-            href={LINE_ADD_FRIEND_URL}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-full text-white text-sm font-medium transition-opacity hover:opacity-90 cursor-pointer"
+            href="#contact"
+            className="px-4 py-2 rounded-full text-white text-sm font-medium transition-opacity hover:opacity-90 cursor-pointer min-h-[44px] flex items-center"
             style={{ backgroundColor: "#00B900" }}
           >
-            <LineIcon size={16} />
-            友だち追加
+            資料請求（無料）
           </a>
         </div>
       </nav>
 
       {/* ======================================
-          Hero セクション
+          Hero セクション（写真背景）
       ====================================== */}
-      <section className="pt-28 pb-20 px-5 text-center" style={{ background: "linear-gradient(180deg, #F0FFF4 0%, #ffffff 100%)" }}>
-        <div className="max-w-2xl mx-auto">
+      <section className="relative pt-28 pb-20 px-5 overflow-hidden">
+        {/* 背景画像 */}
+        <div className="absolute inset-0 z-0">
+          <Image
+            src="/hero-chat.jpg"
+            alt="スマートフォンとチャットのイメージ"
+            fill
+            className="object-cover object-center"
+            priority
+          />
+          <div className="absolute inset-0" style={{ backgroundColor: "rgba(255,255,255,0.82)" }} />
+        </div>
+
+        <div className="relative z-10 max-w-2xl mx-auto text-center">
           {/* バッジ */}
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border border-gray-200 shadow-sm text-sm text-gray-600 mb-6">
             <span className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: "#00B900" }} />
-            クローズドβ版 公開中
+            クローズドβ版 資料請求受付中
           </div>
 
           {/* キャッチコピー */}
@@ -143,18 +144,15 @@ export default function Home() {
           </p>
 
           {/* CTAボタン */}
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <a
-              href={LINE_ADD_FRIEND_URL}
-              className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl text-white font-bold text-base shadow-lg transition-all hover:opacity-90 hover:shadow-xl cursor-pointer"
-              style={{ backgroundColor: "#00B900" }}
-            >
-              <LineIcon size={20} />
-              LINEで友だち追加（無料）
-            </a>
-          </div>
+          <a
+            href="#contact"
+            className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl text-white font-bold text-base shadow-lg transition-all hover:opacity-90 hover:shadow-xl cursor-pointer min-h-[44px]"
+            style={{ backgroundColor: "#00B900" }}
+          >
+            無料で資料請求する
+          </a>
 
-          <p className="mt-4 text-xs text-gray-400">クレジットカード不要・すぐに使い始められます</p>
+          <p className="mt-4 text-xs text-gray-400">クレジットカード不要・2営業日以内にご連絡</p>
         </div>
       </section>
 
@@ -242,20 +240,18 @@ export default function Home() {
 
           <div className="flex flex-col gap-5">
 
-            {/* Scene 1: SNS投稿 */}
             <SceneCard number="1" title="SNS投稿を自動生成" timing="朝、仕入れから戻った時">
               <ChatBubble from="user">今日仕入れた地鶏の写真、投稿文作って</ChatBubble>
               <ChatBubble from="linoa">
-                <span className="font-semibold block mb-1">📷 Instagram用</span>
+                <span className="font-semibold block mb-1">Instagram用</span>
                 今朝入荷したばかりの地元産地鶏。柔らかな身と濃厚な旨みが自慢です。今夜のおすすめは地鶏の炭火焼き。ぜひお越しください。
                 <span className="block mt-1 text-xs" style={{ color: "#00B900" }}>#地鶏 #炭火焼き #宝塚グルメ</span>
-                <span className="font-semibold block mt-2 mb-1">𝕏 X用</span>
+                <span className="font-semibold block mt-2 mb-1">X用</span>
                 朝どれ地鶏が入りました。今夜の炭火焼き、ぜひ。
                 <span className="block text-xs" style={{ color: "#00B900" }}>#宝塚 #地鶏</span>
               </ChatBubble>
             </SceneCard>
 
-            {/* Scene 2: 口コミ返信 */}
             <SceneCard number="2" title="口コミ返信案を生成" timing="隙間時間に口コミ通知が来た時">
               <ChatBubble from="user">
                 口コミへの返信作って。「接客が丁寧で料理も絶品でした。また来ます」
@@ -266,7 +262,6 @@ export default function Home() {
               </ChatBubble>
             </SceneCard>
 
-            {/* Scene 3: 売上記録 */}
             <SceneCard number="3" title="売上を一言で記録" timing="閉店後のレジ締め">
               <ChatBubble from="user">今日18万、52人</ChatBubble>
               <ChatBubble from="linoa">
@@ -280,10 +275,9 @@ export default function Home() {
               </ChatBubble>
             </SceneCard>
 
-            {/* Scene 4: 月次レポート */}
             <SceneCard number="4" title="月次レポートを自動配信" timing="月末にLinoaから届く">
               <ChatBubble from="linoa">
-                <span className="font-semibold block mb-1">📊 3月のレポートです</span>
+                <span className="font-semibold block mb-1">3月のレポートです</span>
                 売上合計：2,450,000円
                 <br />
                 前月比：+12%
@@ -291,12 +285,11 @@ export default function Home() {
                 客単価：3,820円
                 <br />
                 <span className="block mt-2 text-xs p-2 rounded-lg" style={{ backgroundColor: "#F0FFF4" }}>
-                  💡 金曜の2名客でドリンク注文率が低い傾向です。ドリンクセットを提案してみませんか？
+                  金曜の2名客でドリンク注文率が低い傾向です。ドリンクセットを提案してみませんか？
                 </span>
               </ChatBubble>
             </SceneCard>
 
-            {/* Scene 5: 顧客メモ */}
             <SceneCard number="5" title="顧客情報をすぐ呼び出せる" timing="常連客の予約が入った時">
               <ChatBubble from="user">田中さんの情報</ChatBubble>
               <ChatBubble from="linoa">
@@ -380,14 +373,55 @@ export default function Home() {
       </section>
 
       {/* ======================================
-          料金セクション
+          信頼セクション（握手写真）
       ====================================== */}
       <section className="py-16 px-5 bg-white">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12">
+            {/* 写真 */}
+            <div className="w-full md:w-1/2 rounded-2xl overflow-hidden shadow-md aspect-video relative">
+              <Image
+                src="/handshake.webp"
+                alt="パートナーシップと信頼のイメージ"
+                fill
+                className="object-cover object-center"
+              />
+            </div>
+            {/* テキスト */}
+            <div className="w-full md:w-1/2">
+              <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">
+                導入から運用まで、<br />
+                <span style={{ color: "#00B900" }}>サポートします</span>
+              </h2>
+              <p className="text-gray-600 text-sm leading-relaxed mb-6">
+                ITが苦手でも大丈夫。資料請求後、担当者がご連絡し、店舗に合わせた初期設定をサポートします。LINEの操作さえできれば、すぐに使い始められます。
+              </p>
+              <ul className="flex flex-col gap-3">
+                {[
+                  "導入時の初期設定サポート付き",
+                  "使い方のつまずきもLINEで相談OK",
+                  "クローズドβ版のため完全無料",
+                ].map((item, i) => (
+                  <li key={i} className="flex items-center gap-2.5 text-sm text-gray-700">
+                    <CheckIcon />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ======================================
+          料金セクション
+      ====================================== */}
+      <section className="py-16 px-5 bg-gray-50">
         <div className="max-w-lg mx-auto text-center">
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">料金</h2>
           <p className="text-gray-500 text-sm mb-8">シンプルでわかりやすい料金体系</p>
 
-          <div className="rounded-2xl border-2 p-8 shadow-lg" style={{ borderColor: "#00B900" }}>
+          <div className="rounded-2xl border-2 p-8 shadow-lg bg-white" style={{ borderColor: "#00B900" }}>
             <div className="inline-block px-3 py-1 rounded-full text-white text-xs font-bold mb-4" style={{ backgroundColor: "#00B900" }}>
               クローズドβ版
             </div>
@@ -414,39 +448,32 @@ export default function Home() {
             </ul>
 
             <a
-              href={LINE_ADD_FRIEND_URL}
-              className="flex items-center justify-center gap-2 w-full py-4 rounded-xl text-white font-bold text-base transition-opacity hover:opacity-90 cursor-pointer"
+              href="#contact"
+              className="flex items-center justify-center w-full py-4 rounded-xl text-white font-bold text-base transition-opacity hover:opacity-90 cursor-pointer min-h-[44px]"
               style={{ backgroundColor: "#00B900" }}
             >
-              <LineIcon size={20} />
-              無料で始める
+              無料で資料請求する
             </a>
           </div>
         </div>
       </section>
 
       {/* ======================================
-          最終CTAセクション
+          資料請求フォームセクション
       ====================================== */}
-      <section className="py-20 px-5 text-center text-white" style={{ background: "linear-gradient(135deg, #00B900 0%, #00a000 100%)" }}>
-        <div className="max-w-xl mx-auto">
-          <h2 className="text-2xl md:text-3xl font-bold mb-4">
-            まずは無料で試してみませんか？
-          </h2>
-          <p className="text-white/80 mb-8 text-sm leading-relaxed">
-            LINEで友だち追加するだけで始められます。
-            <br />
-            ITが苦手でも大丈夫。使い慣れたLINEがそのまま操作画面です。
-          </p>
-          <a
-            href={LINE_ADD_FRIEND_URL}
-            className="inline-flex items-center justify-center gap-2 px-10 py-4 rounded-2xl bg-white font-bold text-base shadow-xl transition-all hover:shadow-2xl cursor-pointer"
-            style={{ color: "#00B900" }}
-          >
-            <LineIcon size={20} />
-            LINEで友だち追加（無料）
-          </a>
-          <p className="mt-4 text-white/60 text-xs">クレジットカード・アプリのインストール不要</p>
+      <section id="contact" className="py-20 px-5 text-white" style={{ background: "linear-gradient(135deg, #00B900 0%, #00a000 100%)" }}>
+        <div className="max-w-lg mx-auto">
+          <div className="text-center mb-10">
+            <h2 className="text-2xl md:text-3xl font-bold mb-3">
+              無料で資料請求する
+            </h2>
+            <p className="text-white/80 text-sm leading-relaxed">
+              フォームを送信後、2営業日以内に担当者よりご連絡いたします。<br />
+              導入方法や費用について、丁寧にご説明します。
+            </p>
+          </div>
+
+          <ContactForm />
         </div>
       </section>
 
@@ -455,7 +482,7 @@ export default function Home() {
       ====================================== */}
       <footer className="py-8 px-5 bg-gray-900">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <span className="text-white font-bold">Linoa</span>
+          <span className="text-white font-bold text-lg">Linoa</span>
           <p className="text-gray-400 text-xs">© 2026 Linoa. All rights reserved.</p>
         </div>
       </footer>
