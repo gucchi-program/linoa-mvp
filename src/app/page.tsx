@@ -89,12 +89,15 @@ export default function Home() {
       ====================================== */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-sm border-b border-gray-100">
         <div className="max-w-5xl mx-auto px-5 h-14 flex items-center justify-between">
-          <span className="font-bold text-xl text-gray-900">
-            Linoa
-            <span className="ml-2 text-xs font-normal px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: "#00B900" }}>
-              β
+          <div className="flex items-center gap-2">
+            <Image src="/linoa-logo.png" alt="Linoa" width={36} height={36} className="object-contain" />
+            <span className="font-bold text-xl text-gray-900">
+              Linoa
+              <span className="ml-2 text-xs font-normal px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: "#00B900" }}>
+                β
+              </span>
             </span>
-          </span>
+          </div>
           <a
             href="#contact"
             className="px-4 py-2 rounded-full text-white text-sm font-medium transition-opacity hover:opacity-90 cursor-pointer min-h-[44px] flex items-center"
@@ -482,7 +485,10 @@ export default function Home() {
       ====================================== */}
       <footer className="py-8 px-5 bg-gray-900">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <span className="text-white font-bold text-lg">Linoa</span>
+          <div className="flex items-center gap-2">
+            <Image src="/linoa-logo.png" alt="Linoa" width={32} height={32} className="object-contain brightness-0 invert" />
+            <span className="text-white font-bold text-lg">Linoa</span>
+          </div>
           <p className="text-gray-400 text-xs">© 2026 Linoa. All rights reserved.</p>
         </div>
       </footer>
