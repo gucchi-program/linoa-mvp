@@ -21,6 +21,52 @@ export async function middleware(request: NextRequest) {
     return NextResponse.rewrite(rewriteUrl);
   }
 
+  // ── サブドメイン検出：app.li-noa.jp → /store/* にリライト ──
+  // /api/* は除外（Cronジョブ・OAuth callbackはそのまま通す）
+  const isStoreSubdomain =
+    hostname.startsWith("app.") || hostname === "app.li-noa.jp";
+
+  if (isStoreSubdomain && !pathname.startsWith("/store") && !pathname.startsWith("/api")) {
+    const rewriteUrl = request.nextUrl.clone();
+    rewriteUrl.pathname = `/store${pathname === "/" ? "" : pathname}`;
+    return NextResponse.rewrite(rewriteUrl);
+  }
+
+  // ── /store/* の認証保護 ──
+  if (pathname.startsWith("/store")) {
+    const publicStorePaths = ["/store/login"];
+    if (publicStorePaths.some((p) => pathname.startsWith(p))) {
+      return NextResponse.next();
+    }
+
+    let response = NextResponse.next({ request });
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() { return request.cookies.getAll(); },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+            response = NextResponse.next({ request });
+            cookiesToSet.forEach(({ name, value, options }) =>
+              response.cookies.set(name, value, options)
+            );
+          },
+        },
+      }
+    );
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      const loginUrl = request.nextUrl.clone();
+      loginUrl.pathname = "/store/login";
+      return NextResponse.redirect(loginUrl);
+    }
+
+    return response;
+  }
+
   // ── /admin/* の認証保護 ──
   if (pathname.startsWith("/admin")) {
     // ログイン・MFAページは認証不要
