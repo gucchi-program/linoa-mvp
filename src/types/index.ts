@@ -18,6 +18,12 @@ export interface Store {
   owner_tone: string | null;
   profile_prompt: string | null; // Claude用の店舗プロファイル全文
   onboarding_completed: boolean;
+  // Instagram連携（migration 013で追加）
+  instagram_access_token: string | null;
+  instagram_user_id: string | null;
+  instagram_business_account_id: string | null;
+  // Webログイン連携（migration 013で追加）
+  auth_user_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -80,9 +86,14 @@ export interface GeneratedContent {
   content_type: 'sns_post' | 'review_reply' | 'job_post' | 'report';
   input_text: string | null;
   generated_text: string;
-  status: 'draft' | 'approved' | 'posted' | 'rejected';
+  // pending: 30分タイマー待機中 / cancelled: オーナーがキャンセル
+  status: 'draft' | 'pending' | 'approved' | 'posted' | 'rejected' | 'cancelled';
   platform: string | null;
   posted_at: string | null;
+  // Instagram自動投稿用（migration 013で追加）
+  scheduled_at: string | null;
+  image_url: string | null;
+  pending_line_user_id: string | null;
   created_at: string;
 }
 

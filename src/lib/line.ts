@@ -69,6 +69,27 @@ export function createLineClient(channelSecret: string, accessToken: string): Li
 export const defaultLineClient: LineClient = createLineClient(CHANNEL_SECRET, CHANNEL_ACCESS_TOKEN);
 
 // ============================================
+// LINE画像コンテンツダウンロード
+// 画像メッセージのIDを受け取り、バイナリデータを返す。
+// Supabase Storageへのアップロード前処理として使う。
+// ============================================
+export async function downloadLineImage(messageId: string): Promise<Buffer> {
+  const res = await fetch(
+    `https://api-data.line.me/v2/bot/message/${messageId}/content`,
+    {
+      headers: { Authorization: `Bearer ${CHANNEL_ACCESS_TOKEN}` },
+    }
+  );
+
+  if (!res.ok) {
+    throw new Error(`LINE画像ダウンロード失敗: ${res.status}`);
+  }
+
+  const arrayBuffer = await res.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+// ============================================
 // 後方互換のスタンドアロン関数（デフォルトクライアントに委譲）
 // cronジョブ等の既存コードから引き続き呼び出せる
 // ============================================

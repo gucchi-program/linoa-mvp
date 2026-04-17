@@ -286,6 +286,224 @@ export async function saveGeneratedContent(params: {
 }
 
 // ============================================
+// generated_contents テーブル（Instagram自動投稿用）
+// ============================================
+
+// 30分タイマー付きのpendingコンテンツを保存する
+export async function savePendingContent(params: {
+  storeId: string;
+  imageUrl: string;
+  caption: string;
+  lineUserId: string;
+}): Promise<string> {
+  // 30分後のタイムスタンプ
+  const scheduledAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from("generated_contents")
+    .insert({
+      store_id: params.storeId,
+      content_type: "sns_post",
+      input_text: null,
+      generated_text: params.caption,
+      status: "pending",
+      platform: "instagram",
+      scheduled_at: scheduledAt,
+      image_url: params.imageUrl,
+      pending_line_user_id: params.lineUserId,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    console.error("savePendingContent error:", error);
+    throw error;
+  }
+  return data.id;
+}
+
+// 最新のpendingコンテンツをキャンセルする
+export async function cancelLatestPendingContent(
+  storeId: string
+): Promise<boolean> {
+  // 該当店舗のpendingコンテンツのうち最新1件をキャンセル
+  const { data: pending } = await supabase
+    .from("generated_contents")
+    .select("id")
+    .eq("store_id", storeId)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!pending) return false;
+
+  const { error } = await supabase
+    .from("generated_contents")
+    .update({ status: "cancelled" })
+    .eq("id", pending.id);
+
+  if (error) {
+    console.error("cancelLatestPendingContent error:", error);
+    return false;
+  }
+  return true;
+}
+
+// scheduled_at が過ぎた pending コンテンツを取得する（Cronジョブ用）
+export async function getPendingContentsToPost(): Promise<
+  {
+    id: string;
+    store_id: string;
+    generated_text: string;
+    image_url: string;
+    pending_line_user_id: string;
+  }[]
+> {
+  const { data, error } = await supabase
+    .from("generated_contents")
+    .select("id, store_id, generated_text, image_url, pending_line_user_id")
+    .eq("status", "pending")
+    .lte("scheduled_at", new Date().toISOString());
+
+  if (error) {
+    console.error("getPendingContentsToPost error:", error);
+    return [];
+  }
+  return (data ?? []) as {
+    id: string;
+    store_id: string;
+    generated_text: string;
+    image_url: string;
+    pending_line_user_id: string;
+  }[];
+}
+
+// Cronが投稿完了後にstatusをpostedに更新する
+export async function markContentAsPosted(
+  contentId: string,
+  postedAt: string
+): Promise<void> {
+  const { error } = await supabase
+    .from("generated_contents")
+    .update({ status: "posted", posted_at: postedAt })
+    .eq("id", contentId);
+
+  if (error) {
+    console.error("markContentAsPosted error:", error);
+  }
+}
+
+// Cron投稿失敗時にstatusをdraftに戻す（リトライ対象にする）
+export async function markContentAsFailed(contentId: string): Promise<void> {
+  const { error } = await supabase
+    .from("generated_contents")
+    .update({ status: "draft" })
+    .eq("id", contentId);
+
+  if (error) {
+    console.error("markContentAsFailed error:", error);
+  }
+}
+
+// ============================================
+// Supabase Storage（画像アップロード）
+// ============================================
+
+// LINE経由で受け取った画像をSupabase Storageにアップロードし公開URLを返す
+export async function uploadStoreImage(
+  buffer: Buffer,
+  storeId: string,
+  filename: string
+): Promise<string> {
+  const path = `${storeId}/${filename}`;
+
+  const { error } = await supabase.storage
+    .from("store-images")
+    .upload(path, buffer, {
+      contentType: "image/jpeg",
+      upsert: true,
+    });
+
+  if (error) {
+    console.error("uploadStoreImage error:", error);
+    throw error;
+  }
+
+  const { data } = supabase.storage.from("store-images").getPublicUrl(path);
+  return data.publicUrl;
+}
+
+// 参照POPをSupabase Storageにアップロードし公開URLを返す
+export async function uploadReferenceImage(
+  buffer: Buffer,
+  storeId: string,
+  filename: string
+): Promise<string> {
+  const path = `${storeId}/${filename}`;
+
+  const { error } = await supabase.storage
+    .from("reference-images")
+    .upload(path, buffer, {
+      contentType: "image/jpeg",
+      upsert: true,
+    });
+
+  if (error) {
+    console.error("uploadReferenceImage error:", error);
+    throw error;
+  }
+
+  const { data } = supabase.storage.from("reference-images").getPublicUrl(path);
+  return data.publicUrl;
+}
+
+// ============================================
+// stores テーブル（Instagram連携）
+// ============================================
+
+// Instagram連携情報を保存する
+export async function updateStoreInstagram(
+  storeId: string,
+  params: {
+    instagramAccessToken: string;
+    instagramUserId: string;
+    instagramBusinessAccountId: string;
+  }
+): Promise<void> {
+  const { error } = await supabase
+    .from("stores")
+    .update({
+      instagram_access_token: params.instagramAccessToken,
+      instagram_user_id: params.instagramUserId,
+      instagram_business_account_id: params.instagramBusinessAccountId,
+    })
+    .eq("id", storeId);
+
+  if (error) {
+    console.error("updateStoreInstagram error:", error);
+    throw error;
+  }
+}
+
+// auth_user_idで店舗を取得する（Webログイン後の店舗特定）
+export async function getStoreByAuthUserId(
+  authUserId: string
+): Promise<import("@/types").Store | null> {
+  const { data, error } = await supabase
+    .from("stores")
+    .select("*")
+    .eq("auth_user_id", authUserId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("getStoreByAuthUserId error:", error);
+    return null;
+  }
+  return data;
+}
+
+// ============================================
 // messages テーブル
 // ============================================
 
