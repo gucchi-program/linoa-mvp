@@ -2,11 +2,11 @@
 // 資料請求一覧ページ
 // ============================================
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { supabase } from "@/lib/supabase";
 import AdminShell from "../components/AdminShell";
 
+// admin画面はmiddlewareで role + MFA を強制済みなので Service Role で RLS をバイパスする
 async function getInquiries() {
-  const supabase = await createSupabaseServerClient();
   const { data } = await supabase
     .from("contact_requests")
     .select("*")

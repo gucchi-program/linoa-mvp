@@ -15,7 +15,8 @@ export async function middleware(request: NextRequest) {
   const isAdminSubdomain =
     hostname.startsWith("admin.") || hostname === "admin.li-noa.jp";
 
-  if (isAdminSubdomain && !pathname.startsWith("/admin")) {
+  // /api/* は除外（admin 画面から叩く Route Handler をそのまま通すため）
+  if (isAdminSubdomain && !pathname.startsWith("/admin") && !pathname.startsWith("/api")) {
     const rewriteUrl = request.nextUrl.clone();
     rewriteUrl.pathname = `/admin${pathname === "/" ? "" : pathname}`;
     return NextResponse.rewrite(rewriteUrl);
@@ -34,6 +35,7 @@ export async function middleware(request: NextRequest) {
 
   // ── /store/* の認証保護 ──
   if (pathname.startsWith("/store")) {
+    // ログイン・契約ページは認証のみ or 未認証でも通す
     const publicStorePaths = ["/store/login"];
     if (publicStorePaths.some((p) => pathname.startsWith(p))) {
       return NextResponse.next();
@@ -64,18 +66,36 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(loginUrl);
     }
 
+    // /store/billing 配下は契約状況にかかわらず通す（契約・再契約のため）
+    if (pathname.startsWith("/store/billing")) {
+      return response;
+    }
+
+    // 契約状況チェック: active / trialing 以外は /store/billing へ強制
+    const { data: store } = await supabase
+      .from("stores")
+      .select("subscription_status")
+      .eq("auth_user_id", user.id)
+      .maybeSingle();
+
+    const status = store?.subscription_status;
+    const isPaid = status === "active" || status === "trialing";
+    if (!isPaid) {
+      const billingUrl = request.nextUrl.clone();
+      billingUrl.pathname = "/store/billing";
+      return NextResponse.redirect(billingUrl);
+    }
+
     return response;
   }
 
   // ── /admin/* の認証保護 ──
   if (pathname.startsWith("/admin")) {
-    // ログイン・MFAページは認証不要
-    const publicAdminPaths = ["/admin/login", "/admin/mfa", "/admin/mfa/enroll"];
-    if (publicAdminPaths.some((p) => pathname.startsWith(p))) {
+    // ログインページは完全にパブリック
+    if (pathname.startsWith("/admin/login")) {
       return NextResponse.next();
     }
 
-    // セッション確認
     let response = NextResponse.next({ request });
 
     const supabase = createServerClient(
@@ -105,6 +125,29 @@ export async function middleware(request: NextRequest) {
       const loginUrl = request.nextUrl.clone();
       loginUrl.pathname = "/admin/login";
       return NextResponse.redirect(loginUrl);
+    }
+
+    // admin ロール必須（店舗オーナーが間違って入るのを防ぐ）
+    const role = (user.app_metadata as Record<string, unknown> | undefined)?.role;
+    if (role !== "admin") {
+      const loginUrl = request.nextUrl.clone();
+      loginUrl.pathname = "/admin/login";
+      loginUrl.searchParams.set("error", "forbidden");
+      return NextResponse.redirect(loginUrl);
+    }
+
+    // MFA 設定/検証ページはここで通す（AAL2 強制の対象外）
+    if (pathname.startsWith("/admin/mfa")) {
+      return response;
+    }
+
+    // AAL2 (TOTP 検証済) 必須
+    const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aalData?.currentLevel !== "aal2") {
+      const mfaUrl = request.nextUrl.clone();
+      // MFA 登録済みで verify 待ち → /admin/mfa、未登録 → /admin/mfa/enroll
+      mfaUrl.pathname = aalData?.nextLevel === "aal2" ? "/admin/mfa" : "/admin/mfa/enroll";
+      return NextResponse.redirect(mfaUrl);
     }
 
     return response;

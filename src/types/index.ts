@@ -24,9 +24,25 @@ export interface Store {
   instagram_business_account_id: string | null;
   // Webログイン連携（migration 013で追加）
   auth_user_id: string | null;
+  // Stripe決済（migration 014で追加）
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  subscription_status: SubscriptionStatus | null;
+  current_period_end: string | null;
+  initial_payment_at: string | null;
   created_at: string;
   updated_at: string;
 }
+
+// Stripe Subscription Status に準拠
+export type SubscriptionStatus =
+  | 'incomplete'
+  | 'incomplete_expired'
+  | 'trialing'
+  | 'active'
+  | 'past_due'
+  | 'canceled'
+  | 'unpaid';
 
 // LINEメッセージ全件ログ
 export interface Message {
