@@ -153,7 +153,7 @@ export default function Home() {
 
               {/* ミニ信頼テキスト */}
               <p className="mt-5 text-xs text-slate-500">
-                クレジットカード不要・2営業日以内にご連絡
+                資料請求は無料・2営業日以内にご連絡
               </p>
             </div>
 
