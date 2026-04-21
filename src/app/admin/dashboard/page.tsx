@@ -2,11 +2,11 @@
 // 管理ダッシュボード
 // ============================================
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { supabase } from "@/lib/supabase";
 import AdminShell from "../components/AdminShell";
 
+// admin画面はmiddlewareで role + MFA を強制済みなので Service Role で RLS をバイパスする
 async function getStats() {
-  const supabase = await createSupabaseServerClient();
   const [storesResult, inquiriesResult, messagesResult] = await Promise.all([
     supabase.from("stores").select("id, is_active, created_at", { count: "exact" }),
     supabase.from("contact_requests").select("id, created_at", { count: "exact" }),

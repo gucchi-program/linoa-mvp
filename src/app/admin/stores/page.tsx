@@ -3,14 +3,14 @@
 // ============================================
 
 import Link from "next/link";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { supabase } from "@/lib/supabase";
 import AdminShell from "../components/AdminShell";
 
+// admin画面はmiddlewareで role + MFA を強制済みなので Service Role で RLS をバイパスする
 async function getStores() {
-  const supabase = await createSupabaseServerClient();
   const { data } = await supabase
     .from("stores")
-    .select("id, name, store_type, area, store_code, is_active, line_user_id, created_at")
+    .select("id, store_name, store_type, area, store_code, is_active, line_user_id, created_at")
     .order("created_at", { ascending: false });
   return data ?? [];
 }
@@ -60,7 +60,7 @@ export default async function StoresPage() {
                 className="grid grid-cols-[1fr_120px_120px_100px_80px] gap-4 px-5 py-4 border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer items-center"
               >
                 <div>
-                  <p className="text-white text-sm font-medium">{store.name}</p>
+                  <p className="text-white text-sm font-medium">{store.store_name}</p>
                   <p className="text-slate-500 text-xs">{store.store_type ?? "—"} / {store.area ?? "—"}</p>
                 </div>
                 <span className="font-mono text-xs text-slate-300 bg-slate-800 px-2 py-1 rounded-md">

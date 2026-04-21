@@ -4,8 +4,20 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  // 認証＋ roleチェック
+  const authed = await createSupabaseServerClient();
+  const { data: { user } } = await authed.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  const role = (user.app_metadata as Record<string, unknown> | undefined)?.role;
+  if (role !== "admin") {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -20,13 +32,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       return NextResponse.json({ error: "店舗名は必須です" }, { status: 400 });
     }
 
+    // DBカラムは store_name / specialty。フロントは name / concept で送るのでここでマップ
     const { error } = await supabase.from("stores").update({
-      name,
+      store_name: name,
       owner_name: owner_name || null,
       store_type: store_type || null,
       area: area || null,
       price_range: price_range || null,
-      concept: concept || null,
+      specialty: concept || null,
       notes: notes || null,
       is_active: Boolean(is_active),
     }).eq("id", id);

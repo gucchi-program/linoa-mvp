@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 
 export default function StoreEditForm({ store }: { store: Record<string, unknown> }) {
   const router = useRouter();
+  // DBカラムは store_name / specialty。フォーム内部は name / concept で扱う
   const [form, setForm] = useState({
-    name: (store.name as string) ?? "",
+    name: (store.store_name as string) ?? "",
     owner_name: (store.owner_name as string) ?? "",
     store_type: (store.store_type as string) ?? "",
     area: (store.area as string) ?? "",
     price_range: (store.price_range as string) ?? "",
-    concept: (store.concept as string) ?? "",
+    concept: (store.specialty as string) ?? "",
     notes: (store.notes as string) ?? "",
     is_active: (store.is_active as boolean) ?? true,
   });

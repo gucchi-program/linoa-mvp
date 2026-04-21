@@ -4,12 +4,13 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { supabase } from "@/lib/supabase";
 import AdminShell from "../../components/AdminShell";
 import StoreEditForm from "./StoreEditForm";
+import BillingUrlGenerator from "./BillingUrlGenerator";
 
+// admin画面はmiddlewareで role + MFA を強制済みなので Service Role で RLS をバイパスする
 async function getStore(id: string) {
-  const supabase = await createSupabaseServerClient();
   const { data } = await supabase.from("stores").select("*").eq("id", id).single();
   return data;
 }
@@ -27,7 +28,7 @@ export default async function StoreDetailPage({ params }: { params: Promise<{ id
             ← 店舗一覧
           </Link>
           <span className="text-slate-700">/</span>
-          <span className="text-slate-300 text-sm">{store.name}</span>
+          <span className="text-slate-300 text-sm">{store.store_name}</span>
         </div>
 
         {/* 店舗コード表示 */}
@@ -44,6 +45,15 @@ export default async function StoreDetailPage({ params }: { params: Promise<{ id
               {store.line_user_id ? "連携済み" : "未連携"}
             </span>
           </div>
+        </div>
+
+        {/* 契約・決済URL生成 */}
+        <div className="mb-6">
+          <BillingUrlGenerator
+            storeId={store.id}
+            subscriptionStatus={store.subscription_status ?? null}
+            currentPeriodEnd={store.current_period_end ?? null}
+          />
         </div>
 
         <StoreEditForm store={store} />
