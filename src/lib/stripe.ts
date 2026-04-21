@@ -57,15 +57,16 @@ export async function createCheckoutSession(params: {
     throw new Error("Stripe Price ID (初期費用/月額) が未設定です");
   }
 
-  // 初回のみ customer を新規作成。再契約時は既存 customer を使い回す
+  // 再契約時は既存 customer を使い回す。初回は subscription モードが自動で customer を作成する
+  // （subscription モードでは customer_creation は指定不可。payment モード専用パラメータ）
   const customerFields: Pick<
     Stripe.Checkout.SessionCreateParams,
-    "customer" | "customer_email" | "customer_creation"
+    "customer" | "customer_email"
   > = existingCustomerId
     ? { customer: existingCustomerId }
     : customerEmail
-      ? { customer_email: customerEmail, customer_creation: "always" }
-      : { customer_creation: "always" };
+      ? { customer_email: customerEmail }
+      : {};
 
   return stripe.checkout.sessions.create({
     mode: "subscription",
