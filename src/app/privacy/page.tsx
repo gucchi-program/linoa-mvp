@@ -116,7 +116,7 @@ export default function PrivacyPage() {
               本サービスは、ユーザーの同意のもとMeta Platforms, Inc.が提供するInstagram Graph APIおよびFacebook Login for Businessを利用します。本サービスがMetaプラットフォームから取得する情報および取扱いは以下のとおりです。
             </p>
             <ul className="list-disc pl-6 space-y-1 text-gray-700">
-              <li>取得する権限（スコープ）: instagram_basic, instagram_content_publish, pages_show_list, business_management</li>
+              <li>取得する権限（スコープ）: instagram_basic, instagram_content_publish, pages_show_list</li>
               <li>利用目的: ユーザーが指定したInstagramビジネスアカウントに対する投稿の作成および公開</li>
               <li>アクセストークンは当方のデータベース内で暗号化して保管し、本サービス以外の目的では利用しません</li>
               <li>ユーザーはMetaアカウントの設定からいつでも連携を解除できます。連携解除後、当方は該当するアクセストークンを削除します</li>
