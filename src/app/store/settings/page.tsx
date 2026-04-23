@@ -53,7 +53,7 @@ export default function StoreSettingsPage() {
       `${window.location.origin}/api/auth/instagram/callback`
     );
     const scope = encodeURIComponent(
-      "instagram_basic,instagram_content_publish,pages_show_list"
+      "instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement,business_management"
     );
     const url =
       `https://www.facebook.com/v19.0/dialog/oauth` +
