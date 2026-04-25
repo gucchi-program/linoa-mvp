@@ -565,13 +565,30 @@ export default function Home() {
       {/* ======================================
           フッター
       ====================================== */}
-      <footer className="py-8 px-5 bg-slate-950 border-t border-white/5">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5">
-            <Image src="/linoa-logo.png" alt="Linoa" width={28} height={28} className="object-contain" />
-            <span className="text-white font-bold">Linoa</span>
+      <footer className="py-10 px-5 bg-slate-950 border-t border-white/5">
+        <div className="max-w-6xl mx-auto">
+          {/* 上段: ロゴ + 規約リンク */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-6 pb-6 border-b border-white/5">
+            <div className="flex items-center gap-2.5">
+              <Image src="/linoa-logo.png" alt="Linoa" width={28} height={28} className="object-contain" />
+              <span className="text-white font-bold">Linoa</span>
+            </div>
+            <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-slate-400">
+              <a href="/privacy" className="hover:text-white transition-colors cursor-pointer">
+                プライバシーポリシー
+              </a>
+              <a href="/terms" className="hover:text-white transition-colors cursor-pointer">
+                利用規約
+              </a>
+              <a href="/data-deletion" className="hover:text-white transition-colors cursor-pointer">
+                データ削除のお手続き
+              </a>
+            </nav>
           </div>
-          <p className="text-slate-600 text-xs">© 2026 Linoa. All rights reserved.</p>
+          {/* 下段: 著作権 */}
+          <div className="pt-6 text-center sm:text-right">
+            <p className="text-slate-600 text-xs">© 2026 Linoa. All rights reserved.</p>
+          </div>
         </div>
       </footer>
 
