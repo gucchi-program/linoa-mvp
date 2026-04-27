@@ -22,9 +22,11 @@ import {
   savePendingContent,
   cancelLatestPendingContent,
   uploadStoreImage,
+  updateStore,
 } from "@/lib/db";
 import { classifyIntent } from "@/lib/ai/intent-classifier";
 import { routeToHandler } from "@/lib/handlers";
+import { handleOnboarding } from "@/lib/handlers/onboarding";
 import { callClaudeWithImage } from "@/lib/ai/client";
 import { buildSystemPrompt } from "@/lib/ai/store-profile";
 import type { LineWebhookBody, LineWebhookEvent } from "@/types";
@@ -86,8 +88,12 @@ async function handleFollow(event: LineWebhookEvent): Promise<void> {
 
   const welcomeText =
     "はじめまして！Linoa（リノア）です。\n" +
-    "あなたのお店の「専属AI秘書」として、日々の経営をサポートします。\n\n" +
-    "まずはお店の名前を教えてください。";
+    "あなたのお店の専属AI秘書として、毎日そっとサポートします。\n\n" +
+    "まずはお店のことを少しだけ教えてください。\n" +
+    "店名・業態・エリア・席数・こだわりなど、覚えてる範囲で大丈夫です。\n\n" +
+    "例：\n" +
+    "「宝塚で15年やってる居酒屋『鳥源』。20席、唐揚げと日本酒が自慢」\n\n" +
+    "これくらいのざっくりでOKです👌";
 
   await defaultLineClient.replyMessage(event.replyToken, [
     { type: "text", text: welcomeText },
@@ -119,6 +125,13 @@ async function handleTextMessage(event: LineWebhookEvent): Promise<void> {
     return;
   }
 
+  // 旧データ救済: onboarding_completedフラグが導入される前から登録済みの店舗は
+  // 必須項目が揃っていればオンボーディングをスキップする
+  if (!store.onboarding_completed && store.store_name && store.store_type) {
+    await updateStore(store.id, { onboarding_completed: true });
+    store.onboarding_completed = true;
+  }
+
   // 「キャンセル」は意図分類せずに直接処理（Claude API呼び出しを節約）
   if (/^キャンセル$|^きゃんせる$|^cancel$/i.test(userText)) {
     const cancelled = await cancelLatestPendingContent(store.id);
@@ -129,6 +142,33 @@ async function handleTextMessage(event: LineWebhookEvent): Promise<void> {
     await defaultLineClient.replyMessage(event.replyToken, [
       { type: "text", text: replyText },
     ]);
+    return;
+  }
+
+  // オンボーディング未完了の場合は意図分類をスキップしてオンボーディングフローへ
+  if (!store.onboarding_completed) {
+    const replyMessages = await handleOnboarding(store, userText);
+
+    await saveMessage({
+      storeId: store.id,
+      lineUserId,
+      direction: "incoming",
+      content: userText,
+      intent: "onboarding",
+    });
+
+    await defaultLineClient.replyMessage(event.replyToken, replyMessages);
+
+    const replyText = replyMessages
+      .map((m) => (m.type === "text" ? m.text : m.type === "flex" ? m.altText : ""))
+      .join(" ");
+    await saveMessage({
+      storeId: store.id,
+      lineUserId,
+      direction: "outgoing",
+      content: replyText,
+      intent: "onboarding",
+    });
     return;
   }
 
@@ -188,6 +228,20 @@ async function handleImageMessage(event: LineWebhookEvent): Promise<void> {
   if (!store) {
     await defaultLineClient.replyMessage(event.replyToken, [
       { type: "text", text: "お店の登録が見つかりません。友だち追加からやり直してください。" },
+    ]);
+    return;
+  }
+
+  // オンボーディング未完了の場合はまず店舗情報の登録を促す
+  if (!store.onboarding_completed) {
+    await defaultLineClient.replyMessage(event.replyToken, [
+      {
+        type: "text",
+        text:
+          "写真をありがとうございます！\n" +
+          "まずはお店のことを教えてもらえると、ぴったりな投稿文が作れます。\n\n" +
+          "例：「宝塚で15年やってる居酒屋『鳥源』。20席、唐揚げと日本酒が自慢」",
+      },
     ]);
     return;
   }
