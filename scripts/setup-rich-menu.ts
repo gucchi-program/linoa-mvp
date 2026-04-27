@@ -4,24 +4,36 @@
  * リッチメニューとは:
  * LINE公式アカウントのトーク画面下部に常時表示されるメニューボタン。
  * ユーザーがボタンをタップすると、設定したテキストが自動送信される。
- * これにより「日報」と手打ちする必要がなくなり、UXが大幅に向上する。
  *
- * 実行方法: npx tsx scripts/setup-rich-menu.ts
+ * 画像は Next.js の API ルート `/api/richmenu/image` で動的生成する。
+ * ローカル(dev) または 本番URLから画像を取得して LINE API にアップロードする。
  *
- * API仕様:
- * 1. リッチメニューオブジェクトを作成（JSON定義）
- * 2. メニュー画像をアップロード（1つの画像を領域分割して各ボタンに割り当て）
- * 3. デフォルトメニューとして設定（全ユーザーに適用）
+ * 実行方法:
+ *   1) ローカルから:    npm run dev を起動 → npx tsx scripts/setup-rich-menu.ts
+ *   2) 本番URLから:     RICHMENU_IMAGE_URL=https://app.li-noa.jp/api/richmenu/image npx tsx scripts/setup-rich-menu.ts
  *
- * 今回は画像なしで、テキストベースのリッチメニューを作成する。
- * 画像は2500x1686pxまたは2500x843pxが必要だが、
- * Canvasでプログラム生成する（node-canvasは不要、APIで直接PNG生成）
+ * 必要な環境変数:
+ *   - LINE_CHANNEL_ACCESS_TOKEN
+ *   - RICHMENU_IMAGE_URL（任意。未指定なら http://localhost:3000/api/richmenu/image）
  */
 
-const CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN!;
-const API_BASE = "https://api.line.me/v2/bot";
+// Next.js の env loader を使って .env.local 等を自動読み込みする
+// （npx tsx は通常 .env.local を読まないため明示的にロードする）
+import { loadEnvConfig } from "@next/env";
+loadEnvConfig(process.cwd());
 
-async function lineApi(path: string, options: RequestInit = {}) {
+const CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+if (!CHANNEL_ACCESS_TOKEN) {
+  console.error("LINE_CHANNEL_ACCESS_TOKEN が設定されていません。.env.local を確認してください。");
+  process.exit(1);
+}
+
+const IMAGE_URL = process.env.RICHMENU_IMAGE_URL ?? "http://localhost:3000/api/richmenu/image";
+const API_BASE = "https://api.line.me/v2/bot";
+const DATA_API_BASE = "https://api-data.line.me/v2/bot";
+
+// LINE API共通ラッパー（JSON / 204対応）
+async function lineApi(path: string, options: RequestInit = {}): Promise<unknown> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
@@ -31,9 +43,8 @@ async function lineApi(path: string, options: RequestInit = {}) {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`LINE API error ${res.status}: ${text}`);
+    throw new Error(`LINE API error ${res.status} (${path}): ${text}`);
   }
-  // 204 No Content の場合はnullを返す
   if (res.status === 204) return null;
   const contentType = res.headers.get("content-type");
   if (contentType?.includes("application/json")) {
@@ -42,157 +53,87 @@ async function lineApi(path: string, options: RequestInit = {}) {
   return null;
 }
 
-// リッチメニュー画像をプログラムで生成（2500x843px）
-// 左半分: 「日報入力」、右半分: 「レポート」
-function createMenuImage(): Buffer {
-  // 最小限のPNG生成（ヘッダー情報のみ）は難しいので、
-  // 代わりに1x1のPNGからスケーリングするアプローチを取る
-  // → 実際にはLINE APIは最低限の画像が必要なので、
-  //   BMP形式で簡易生成する
-
-  const width = 2500;
-  const height = 843;
-
-  // PPM形式（非圧縮画像）で生成してからPNGに変換...
-  // → 外部ライブラリなしでは困難なので、別アプローチを使う
-
-  // 代替案: JPEG形式の最小画像を生成
-  // 実際のデザインはLINE側のテキストラベルで表示するため、
-  // 背景色のみの画像で十分
-
-  // 2色の背景を持つBMP画像を生成
-  return createBmpImage(width, height);
-}
-
-function createBmpImage(width: number, height: number): Buffer {
-  // BMP形式: ヘッダー(54bytes) + ピクセルデータ
-  // 各行は4バイト境界にパディング
-  const bytesPerPixel = 3;
-  const rowSize = Math.ceil((width * bytesPerPixel) / 4) * 4;
-  const pixelDataSize = rowSize * height;
-  const fileSize = 54 + pixelDataSize;
-
-  const buffer = Buffer.alloc(fileSize);
-
-  // BMP File Header (14 bytes)
-  buffer.write("BM", 0);
-  buffer.writeUInt32LE(fileSize, 2);
-  buffer.writeUInt32LE(0, 6); // reserved
-  buffer.writeUInt32LE(54, 10); // pixel data offset
-
-  // DIB Header (40 bytes)
-  buffer.writeUInt32LE(40, 14); // header size
-  buffer.writeInt32LE(width, 18);
-  buffer.writeInt32LE(height, 22); // positive = bottom-up
-  buffer.writeUInt16LE(1, 26); // color planes
-  buffer.writeUInt16LE(24, 28); // bits per pixel
-  buffer.writeUInt32LE(0, 30); // no compression
-  buffer.writeUInt32LE(pixelDataSize, 34);
-  buffer.writeUInt32LE(2835, 38); // horizontal resolution
-  buffer.writeUInt32LE(2835, 42); // vertical resolution
-  buffer.writeUInt32LE(0, 46); // colors in palette
-  buffer.writeUInt32LE(0, 50); // important colors
-
-  // ピクセルデータ（BMPは下から上に格納）
-  // 左半分: インディゴ (#4F46E5) → BGR: 0xE5, 0x46, 0x4F
-  // 右半分: LINE緑 (#06C755) → BGR: 0x55, 0xC7, 0x06
-  const halfWidth = Math.floor(width / 2);
-
-  for (let y = 0; y < height; y++) {
-    const rowOffset = 54 + y * rowSize;
-    for (let x = 0; x < width; x++) {
-      const pixelOffset = rowOffset + x * 3;
-      if (x < halfWidth) {
-        // 左: インディゴ（BGR）
-        buffer[pixelOffset] = 0xe5;
-        buffer[pixelOffset + 1] = 0x46;
-        buffer[pixelOffset + 2] = 0x4f;
-      } else {
-        // 右: LINE緑（BGR）
-        buffer[pixelOffset] = 0x55;
-        buffer[pixelOffset + 1] = 0xc7;
-        buffer[pixelOffset + 2] = 0x06;
-      }
-    }
+async function fetchMenuImage(): Promise<Buffer> {
+  console.log(`画像を取得中: ${IMAGE_URL}`);
+  const res = await fetch(IMAGE_URL);
+  if (!res.ok) {
+    throw new Error(`画像取得失敗 ${res.status}: ${IMAGE_URL}`);
   }
-
-  return buffer;
+  const arrayBuffer = await res.arrayBuffer();
+  return Buffer.from(arrayBuffer);
 }
 
 async function main() {
   console.log("リッチメニューを設定します...\n");
 
-  // 1. 既存のデフォルトリッチメニューを確認・削除
+  // 1. 既存のデフォルトリッチメニューがあれば削除
   try {
-    const defaultMenu = await lineApi("/user/all/richmenu");
-    if (defaultMenu?.richMenuId) {
-      console.log(`既存リッチメニューを削除: ${defaultMenu.richMenuId}`);
-      await lineApi(`/richmenu/${defaultMenu.richMenuId}`, { method: "DELETE" });
+    const existing = (await lineApi("/user/all/richmenu")) as { richMenuId?: string } | null;
+    if (existing?.richMenuId) {
+      console.log(`既存リッチメニューを削除: ${existing.richMenuId}`);
+      await lineApi(`/richmenu/${existing.richMenuId}`, { method: "DELETE" });
     }
   } catch {
-    // デフォルトが未設定の場合はエラーになるが無視
+    // デフォルトが未設定の場合はエラーになるが想定内なので無視
   }
 
-  // 2. リッチメニュー作成
+  // 2. リッチメニュー定義を作成
   // サイズは2500x843（コンパクト版）、3分割
-  const thirdWidth = Math.floor(2500 / 3); // 833px
+  const sectionWidth = Math.floor(2500 / 3); // 833px ずつ
+  const lastSectionWidth = 2500 - sectionWidth * 2; // 端数を最後のセクションに寄せる
+
   const menuData = {
     size: { width: 2500, height: 843 },
-    selected: true, // デフォルトで開いた状態
-    name: "Linoa メインメニュー v2",
+    selected: true, // 友だち追加直後にメニューが開いた状態にする
+    name: "Linoa メインメニュー v3",
     chatBarText: "メニュー",
     areas: [
       {
-        // 左: 日報入力
-        bounds: { x: 0, y: 0, width: thirdWidth, height: 843 },
-        action: { type: "message", text: "日報" },
+        // 左: SNS投稿
+        bounds: { x: 0, y: 0, width: sectionWidth, height: 843 },
+        action: { type: "message", text: "Instagram投稿を作って" },
       },
       {
-        // 中央: SNS/POP生成
-        bounds: { x: thirdWidth, y: 0, width: thirdWidth, height: 843 },
-        action: { type: "message", text: "SNS" },
+        // 中央: レポート
+        bounds: { x: sectionWidth, y: 0, width: sectionWidth, height: 843 },
+        action: { type: "message", text: "今月の売上どうだった？" },
       },
       {
-        // 右: レポート表示
-        bounds: { x: thirdWidth * 2, y: 0, width: 2500 - thirdWidth * 2, height: 843 },
-        action: { type: "message", text: "レポート" },
+        // 右: ヘルプ
+        bounds: { x: sectionWidth * 2, y: 0, width: lastSectionWidth, height: 843 },
+        action: { type: "message", text: "Linoaで何ができる？" },
       },
     ],
   };
 
-  const createResult = await lineApi("/richmenu", {
+  const createResult = (await lineApi("/richmenu", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(menuData),
-  });
+  })) as { richMenuId: string };
 
   const richMenuId = createResult.richMenuId;
   console.log(`リッチメニュー作成: ${richMenuId}`);
 
   // 3. メニュー画像をアップロード
-  // LINE APIはJPEG/PNGを受け付ける。BMPは非対応なので、
-  // 最小限のPNG画像を手動で生成する
-  const imageBuffer = createSimplePng(2500, 843);
+  const imageBuffer = await fetchMenuImage();
 
-  const uploadRes = await fetch(
-    `https://api-data.line.me/v2/bot/richmenu/${richMenuId}/content`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${CHANNEL_ACCESS_TOKEN}`,
-        "Content-Type": "image/png",
-      },
-      body: imageBuffer as unknown as BodyInit,
-    }
-  );
+  const uploadRes = await fetch(`${DATA_API_BASE}/richmenu/${richMenuId}/content`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${CHANNEL_ACCESS_TOKEN}`,
+      "Content-Type": "image/png",
+    },
+    body: imageBuffer as unknown as BodyInit,
+  });
 
   if (!uploadRes.ok) {
     const err = await uploadRes.text();
-    throw new Error(`画像アップロード失敗: ${err}`);
+    throw new Error(`画像アップロード失敗 ${uploadRes.status}: ${err}`);
   }
   console.log("メニュー画像アップロード完了");
 
-  // 4. デフォルトリッチメニューに設定（全ユーザーに適用）
+  // 4. デフォルトメニューに設定（全ユーザー対象）
   await lineApi(`/user/all/richmenu/${richMenuId}`, { method: "POST" });
   console.log("デフォルトリッチメニューに設定完了");
 
@@ -200,98 +141,7 @@ async function main() {
   console.log("LINEトーク画面の下部にメニューが表示されます。");
 }
 
-// 非圧縮PNG画像を生成する関数
-// zlib不要で、2色の背景（左:インディゴ、右:LINE緑）のPNGを生成
-function createSimplePng(width: number, height: number): Buffer {
-  // PNGは圧縮が必須だが、store(無圧縮)モードのdeflateブロックを使える
-  // 各行: フィルタバイト(0x00) + RGB*width = 1 + 3*width bytes
-  const rowBytes = 1 + width * 3;
-  const rawData = Buffer.alloc(rowBytes * height);
-
-  const thirdWidth = Math.floor(width / 3);
-
-  for (let y = 0; y < height; y++) {
-    const rowOffset = y * rowBytes;
-    rawData[rowOffset] = 0; // フィルタなし
-
-    for (let x = 0; x < width; x++) {
-      const pixelOffset = rowOffset + 1 + x * 3;
-      if (x < thirdWidth) {
-        // 左: インディゴ (#4F46E5) 日報
-        rawData[pixelOffset] = 0x4f;
-        rawData[pixelOffset + 1] = 0x46;
-        rawData[pixelOffset + 2] = 0xe5;
-      } else if (x < thirdWidth * 2) {
-        // 中央: パープル (#7C3AED) SNS/POP
-        rawData[pixelOffset] = 0x7c;
-        rawData[pixelOffset + 1] = 0x3a;
-        rawData[pixelOffset + 2] = 0xed;
-      } else {
-        // 右: LINE緑 (#06C755) レポート
-        rawData[pixelOffset] = 0x06;
-        rawData[pixelOffset + 1] = 0xc7;
-        rawData[pixelOffset + 2] = 0x55;
-      }
-    }
-  }
-
-  // zlibのstoreモードで圧縮（実質無圧縮）
-  const zlib = require("zlib");
-  const compressed = zlib.deflateSync(rawData, { level: 9 });
-
-  // PNGファイル構築
-  const chunks: Buffer[] = [];
-
-  // PNGシグネチャ
-  chunks.push(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
-
-  // IHDR チャンク
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(width, 0);
-  ihdr.writeUInt32BE(height, 4);
-  ihdr[8] = 8; // bit depth
-  ihdr[9] = 2; // color type: RGB
-  ihdr[10] = 0; // compression
-  ihdr[11] = 0; // filter
-  ihdr[12] = 0; // interlace
-  chunks.push(createPngChunk("IHDR", ihdr));
-
-  // IDAT チャンク（圧縮済みピクセルデータ）
-  chunks.push(createPngChunk("IDAT", compressed));
-
-  // IEND チャンク
-  chunks.push(createPngChunk("IEND", Buffer.alloc(0)));
-
-  return Buffer.concat(chunks);
-}
-
-function createPngChunk(type: string, data: Buffer): Buffer {
-  const length = Buffer.alloc(4);
-  length.writeUInt32BE(data.length, 0);
-
-  const typeBuffer = Buffer.from(type, "ascii");
-  const crcData = Buffer.concat([typeBuffer, data]);
-
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(crc32(crcData), 0);
-
-  return Buffer.concat([length, typeBuffer, data, crc]);
-}
-
-// CRC32計算（PNG仕様準拠）
-function crc32(data: Buffer): number {
-  let crc = 0xffffffff;
-  for (let i = 0; i < data.length; i++) {
-    crc = crc ^ data[i];
-    for (let j = 0; j < 8; j++) {
-      if (crc & 1) {
-        crc = (crc >>> 1) ^ 0xedb88320;
-      } else {
-        crc = crc >>> 1;
-      }
-    }
-  }
-  return (crc ^ 0xffffffff) >>> 0;
-}
-
-main().catch(console.error);
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
