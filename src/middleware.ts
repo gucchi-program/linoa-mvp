@@ -11,6 +11,36 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hostname = request.headers.get("host") ?? "";
 
+  // ── /forvc の Basic 認証 ──
+  // VC向け資料ページはパスワード保護する
+  // ユーザー名 "vc" 固定 + 環境変数 FORVC_PASSWORD で照合
+  if (pathname.startsWith("/forvc")) {
+    const expected = process.env.FORVC_PASSWORD;
+    if (!expected) {
+      return new NextResponse("Service Unavailable: FORVC_PASSWORD未設定", { status: 503 });
+    }
+
+    const authHeader = request.headers.get("authorization");
+    if (authHeader?.startsWith("Basic ")) {
+      try {
+        const decoded = atob(authHeader.slice(6));
+        const [user, pass] = decoded.split(":");
+        if (user === "vc" && pass === expected) {
+          return NextResponse.next();
+        }
+      } catch {
+        // base64 デコード失敗は認証失敗扱い
+      }
+    }
+
+    return new NextResponse("Authentication required", {
+      status: 401,
+      headers: {
+        "WWW-Authenticate": 'Basic realm="Linoa VC", charset="UTF-8"',
+      },
+    });
+  }
+
   // ── サブドメイン検出：admin.li-noa.jp → /admin/* にリライト ──
   const isAdminSubdomain =
     hostname.startsWith("admin.") || hostname === "admin.li-noa.jp";
